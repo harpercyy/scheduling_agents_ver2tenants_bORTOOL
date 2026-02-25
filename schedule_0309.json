@@ -38,9 +38,9 @@
       "day_of_week": "週六",
       "employee_id": "1",
       "employee_name": "林靜宜 (Sherry)",
-      "shift_start": "16:00",
-      "shift_end": "01:00",
-      "workstation": "B010",
+      "shift_start": "11:00",
+      "shift_end": "21:00",
+      "workstation": "B104",
       "workstation_role": "烤手",
       "leave_type": null
     },
@@ -49,9 +49,9 @@
       "day_of_week": "週日",
       "employee_id": "1",
       "employee_name": "林靜宜 (Sherry)",
-      "shift_start": "11:00",
-      "shift_end": "21:00",
-      "workstation": "B104",
+      "shift_start": "15:00",
+      "shift_end": "00:00",
+      "workstation": "B009",
       "workstation_role": "烤手",
       "leave_type": null
     },
@@ -67,8 +67,8 @@
       "leave_type": null
     },
     {
-      "date": "2026-03-10",
-      "day_of_week": "週二",
+      "date": "2026-03-12",
+      "day_of_week": "週四",
       "employee_id": "2",
       "employee_name": "李基雨 (Kiwoo)",
       "shift_start": "14:00",
@@ -126,17 +126,6 @@
       "day_of_week": "週四",
       "employee_id": "3",
       "employee_name": "史曜誠 (Money)",
-      "shift_start": "16:00",
-      "shift_end": "01:00",
-      "workstation": "B010",
-      "workstation_role": "烤手",
-      "leave_type": null
-    },
-    {
-      "date": "2026-03-13",
-      "day_of_week": "週五",
-      "employee_id": "3",
-      "employee_name": "史曜誠 (Money)",
       "shift_start": "15:00",
       "shift_end": "00:00",
       "workstation": "B009",
@@ -144,6 +133,17 @@
       "leave_type": null
     },
     {
+      "date": "2026-03-13",
+      "day_of_week": "週五",
+      "employee_id": "3",
+      "employee_name": "史曜誠 (Money)",
+      "shift_start": "16:00",
+      "shift_end": "01:00",
+      "workstation": "B010",
+      "workstation_role": "烤手",
+      "leave_type": null
+    },
+    {
       "date": "2026-03-14",
       "day_of_week": "週六",
       "employee_id": "3",
@@ -170,9 +170,9 @@
       "day_of_week": "週一",
       "employee_id": "4",
       "employee_name": "黃妤婕 (Ada)",
-      "shift_start": "16:00",
-      "shift_end": "01:00",
-      "workstation": "B010",
+      "shift_start": "15:00",
+      "shift_end": "00:00",
+      "workstation": "B009",
       "workstation_role": "烤手",
       "leave_type": null
     },
@@ -203,9 +203,9 @@
       "day_of_week": "週六",
       "employee_id": "4",
       "employee_name": "黃妤婕 (Ada)",
-      "shift_start": "10:00",
-      "shift_end": "19:00",
-      "workstation": "B003",
+      "shift_start": "16:00",
+      "shift_end": "01:00",
+      "workstation": "B010",
       "workstation_role": "烤手",
       "leave_type": null
     },
@@ -214,9 +214,9 @@
       "day_of_week": "週日",
       "employee_id": "4",
       "employee_name": "黃妤婕 (Ada)",
-      "shift_start": "16:00",
-      "shift_end": "01:00",
-      "workstation": "B010",
+      "shift_start": "10:00",
+      "shift_end": "19:00",
+      "workstation": "B003",
       "workstation_role": "烤手",
       "leave_type": null
     },
@@ -314,8 +314,8 @@
       "employee_id": "6",
       "employee_name": "范袁郡 (Eggsy)",
       "shift_start": "10:00",
-      "shift_end": "20:00",
-      "workstation": "B103",
+      "shift_end": "19:00",
+      "workstation": "B003",
       "workstation_role": "烤手",
       "leave_type": null
     },
@@ -325,8 +325,30 @@
       "employee_id": "6",
       "employee_name": "范袁郡 (Eggsy)",
       "shift_start": "10:00",
-      "shift_end": "19:00",
-      "workstation": "B003",
+      "shift_end": "20:00",
+      "workstation": "B103",
+      "workstation_role": "烤手",
+      "leave_type": null
+    },
+    {
+      "date": "2026-03-09",
+      "day_of_week": "週一",
+      "employee_id": "7",
+      "employee_name": "王倩雯 (Cooper)",
+      "shift_start": "10:00",
+      "shift_end": "20:00",
+      "workstation": "B103",
+      "workstation_role": "烤手",
+      "leave_type": null
+    },
+    {
+      "date": "2026-03-10",
+      "day_of_week": "週二",
+      "employee_id": "7",
+      "employee_name": "王倩雯 (Cooper)",
+      "shift_start": "10:00",
+      "shift_end": "20:00",
+      "workstation": "B103",
       "workstation_role": "烤手",
       "leave_type": null
     },
@@ -353,36 +375,14 @@
       "leave_type": null
     },
     {
-      "date": "2026-03-13",
-      "day_of_week": "週五",
-      "employee_id": "7",
-      "employee_name": "王倩雯 (Cooper)",
-      "shift_start": "10:00",
-      "shift_end": "20:00",
-      "workstation": "B103",
-      "workstation_role": "烤手",
-      "leave_type": null
-    },
-    {
-      "date": "2026-03-14",
-      "day_of_week": "週六",
-      "employee_id": "7",
-      "employee_name": "王倩雯 (Cooper)",
-      "shift_start": "10:00",
-      "shift_end": "20:00",
-      "workstation": "B103",
-      "workstation_role": "烤手",
-      "leave_type": null
-    },
-    {
       "date": "2026-03-09",
       "day_of_week": "週一",
       "employee_id": "8",
       "employee_name": "吳咨錞 (Tess)",
       "shift_start": "10:00",
-      "shift_end": "20:00",
-      "workstation": "B103",
-      "workstation_role": "烤手",
+      "shift_end": "21:00",
+      "workstation": "櫃台(早)",
+      "workstation_role": "領檯早",
       "leave_type": null
     },
     {
@@ -413,9 +413,9 @@
       "employee_id": "8",
       "employee_name": "吳咨錞 (Tess)",
       "shift_start": "10:00",
-      "shift_end": "20:00",
-      "workstation": "B103",
-      "workstation_role": "烤手",
+      "shift_end": "21:00",
+      "workstation": "櫃台(早)",
+      "workstation_role": "領檯早",
       "leave_type": null
     },
     {
@@ -435,9 +435,9 @@
       "employee_id": "9",
       "employee_name": "洪菀妤 (Leona)",
       "shift_start": "10:00",
-      "shift_end": "21:00",
-      "workstation": "櫃台(早)",
-      "workstation_role": "領檯早",
+      "shift_end": "20:00",
+      "workstation": "B103",
+      "workstation_role": "烤手",
       "leave_type": null
     },
     {
@@ -468,9 +468,9 @@
       "employee_id": "9",
       "employee_name": "洪菀妤 (Leona)",
       "shift_start": "10:00",
-      "shift_end": "21:00",
-      "workstation": "櫃台(早)",
-      "workstation_role": "領檯早",
+      "shift_end": "20:00",
+      "workstation": "B103",
+      "workstation_role": "烤手",
       "leave_type": null
     },
     {
@@ -478,61 +478,6 @@
       "day_of_week": "週日",
       "employee_id": "9",
       "employee_name": "洪菀妤 (Leona)",
-      "shift_start": "10:00",
-      "shift_end": "20:00",
-      "workstation": "B103",
-      "workstation_role": "烤手",
-      "leave_type": null
-    },
-    {
-      "date": "2026-03-09",
-      "day_of_week": "週一",
-      "employee_id": "10",
-      "employee_name": "陸采葳 (Wina)",
-      "shift_start": "10:00",
-      "shift_end": "20:00",
-      "workstation": "B103",
-      "workstation_role": "烤手",
-      "leave_type": null
-    },
-    {
-      "date": "2026-03-10",
-      "day_of_week": "週二",
-      "employee_id": "10",
-      "employee_name": "陸采葳 (Wina)",
-      "shift_start": "10:00",
-      "shift_end": "20:00",
-      "workstation": "B103",
-      "workstation_role": "烤手",
-      "leave_type": null
-    },
-    {
-      "date": "2026-03-14",
-      "day_of_week": "週六",
-      "employee_id": "10",
-      "employee_name": "陸采葳 (Wina)",
-      "shift_start": "10:00",
-      "shift_end": "20:00",
-      "workstation": "B103",
-      "workstation_role": "烤手",
-      "leave_type": null
-    },
-    {
-      "date": "2026-03-15",
-      "day_of_week": "週日",
-      "employee_id": "10",
-      "employee_name": "陸采葳 (Wina)",
-      "shift_start": "10:00",
-      "shift_end": "20:00",
-      "workstation": "B103",
-      "workstation_role": "烤手",
-      "leave_type": null
-    },
-    {
-      "date": "2026-03-10",
-      "day_of_week": "週二",
-      "employee_id": "11",
-      "employee_name": "歐文莉 (Josephine)",
       "shift_start": "10:00",
       "shift_end": "20:00",
       "workstation": "B103",
@@ -542,8 +487,8 @@
     {
       "date": "2026-03-11",
       "day_of_week": "週三",
-      "employee_id": "11",
-      "employee_name": "歐文莉 (Josephine)",
+      "employee_id": "10",
+      "employee_name": "陸采葳 (Wina)",
       "shift_start": "10:00",
       "shift_end": "20:00",
       "workstation": "B103",
@@ -553,8 +498,8 @@
     {
       "date": "2026-03-12",
       "day_of_week": "週四",
-      "employee_id": "11",
-      "employee_name": "歐文莉 (Josephine)",
+      "employee_id": "10",
+      "employee_name": "陸采葳 (Wina)",
       "shift_start": "10:00",
       "shift_end": "20:00",
       "workstation": "B103",
@@ -564,6 +509,61 @@
     {
       "date": "2026-03-13",
       "day_of_week": "週五",
+      "employee_id": "10",
+      "employee_name": "陸采葳 (Wina)",
+      "shift_start": "10:00",
+      "shift_end": "20:00",
+      "workstation": "B103",
+      "workstation_role": "烤手",
+      "leave_type": null
+    },
+    {
+      "date": "2026-03-14",
+      "day_of_week": "週六",
+      "employee_id": "10",
+      "employee_name": "陸采葳 (Wina)",
+      "shift_start": "10:00",
+      "shift_end": "20:00",
+      "workstation": "B103",
+      "workstation_role": "烤手",
+      "leave_type": null
+    },
+    {
+      "date": "2026-03-09",
+      "day_of_week": "週一",
+      "employee_id": "11",
+      "employee_name": "歐文莉 (Josephine)",
+      "shift_start": "10:00",
+      "shift_end": "20:00",
+      "workstation": "B103",
+      "workstation_role": "烤手",
+      "leave_type": null
+    },
+    {
+      "date": "2026-03-10",
+      "day_of_week": "週二",
+      "employee_id": "11",
+      "employee_name": "歐文莉 (Josephine)",
+      "shift_start": "10:00",
+      "shift_end": "20:00",
+      "workstation": "B103",
+      "workstation_role": "烤手",
+      "leave_type": null
+    },
+    {
+      "date": "2026-03-14",
+      "day_of_week": "週六",
+      "employee_id": "11",
+      "employee_name": "歐文莉 (Josephine)",
+      "shift_start": "10:00",
+      "shift_end": "20:00",
+      "workstation": "B103",
+      "workstation_role": "烤手",
+      "leave_type": null
+    },
+    {
+      "date": "2026-03-15",
+      "day_of_week": "週日",
       "employee_id": "11",
       "employee_name": "歐文莉 (Josephine)",
       "shift_start": "10:00",
@@ -584,8 +584,19 @@
       "leave_type": null
     },
     {
-      "date": "2026-03-10",
-      "day_of_week": "週二",
+      "date": "2026-03-12",
+      "day_of_week": "週四",
+      "employee_id": "12",
+      "employee_name": "邱筱涵 (Amy)",
+      "shift_start": "10:00",
+      "shift_end": "20:00",
+      "workstation": "B103",
+      "workstation_role": "烤手",
+      "leave_type": null
+    },
+    {
+      "date": "2026-03-13",
+      "day_of_week": "週五",
       "employee_id": "12",
       "employee_name": "邱筱涵 (Amy)",
       "shift_start": "10:00",
@@ -597,17 +608,6 @@
     {
       "date": "2026-03-14",
       "day_of_week": "週六",
-      "employee_id": "12",
-      "employee_name": "邱筱涵 (Amy)",
-      "shift_start": "10:00",
-      "shift_end": "20:00",
-      "workstation": "B103",
-      "workstation_role": "烤手",
-      "leave_type": null
-    },
-    {
-      "date": "2026-03-15",
-      "day_of_week": "週日",
       "employee_id": "12",
       "employee_name": "邱筱涵 (Amy)",
       "shift_start": "10:00",
@@ -639,8 +639,8 @@
       "leave_type": null
     },
     {
-      "date": "2026-03-12",
-      "day_of_week": "週四",
+      "date": "2026-03-14",
+      "day_of_week": "週六",
       "employee_id": "13",
       "employee_name": "黃培瑜 (Jacky)",
       "shift_start": "10:00",
@@ -672,8 +672,8 @@
       "leave_type": null
     },
     {
-      "date": "2026-03-12",
-      "day_of_week": "週四",
+      "date": "2026-03-10",
+      "day_of_week": "週二",
       "employee_id": "14",
       "employee_name": "江珮齡 (Jiang)",
       "shift_start": "10:00",
@@ -683,10 +683,109 @@
       "leave_type": null
     },
     {
-      "date": "2026-03-13",
-      "day_of_week": "週五",
+      "date": "2026-03-11",
+      "day_of_week": "週三",
       "employee_id": "14",
       "employee_name": "江珮齡 (Jiang)",
+      "shift_start": "10:00",
+      "shift_end": "20:00",
+      "workstation": "B103",
+      "workstation_role": "烤手",
+      "leave_type": null
+    },
+    {
+      "date": "2026-03-15",
+      "day_of_week": "週日",
+      "employee_id": "14",
+      "employee_name": "江珮齡 (Jiang)",
+      "shift_start": "10:00",
+      "shift_end": "20:00",
+      "workstation": "B103",
+      "workstation_role": "烤手",
+      "leave_type": null
+    },
+    {
+      "date": "2026-03-09",
+      "day_of_week": "週一",
+      "employee_id": "15",
+      "employee_name": "陳家茜 (Emily)",
+      "shift_start": "14:00",
+      "shift_end": "23:00",
+      "workstation": "B008",
+      "workstation_role": "烤手",
+      "leave_type": null
+    },
+    {
+      "date": "2026-03-10",
+      "day_of_week": "週二",
+      "employee_id": "15",
+      "employee_name": "陳家茜 (Emily)",
+      "shift_start": "14:00",
+      "shift_end": "23:00",
+      "workstation": "B008",
+      "workstation_role": "烤手",
+      "leave_type": null
+    },
+    {
+      "date": "2026-03-11",
+      "day_of_week": "週三",
+      "employee_id": "15",
+      "employee_name": "陳家茜 (Emily)",
+      "shift_start": "14:00",
+      "shift_end": "23:00",
+      "workstation": "B008",
+      "workstation_role": "烤手",
+      "leave_type": null
+    },
+    {
+      "date": "2026-03-12",
+      "day_of_week": "週四",
+      "employee_id": "15",
+      "employee_name": "陳家茜 (Emily)",
+      "shift_start": "14:00",
+      "shift_end": "23:00",
+      "workstation": "B008",
+      "workstation_role": "烤手",
+      "leave_type": null
+    },
+    {
+      "date": "2026-03-13",
+      "day_of_week": "週五",
+      "employee_id": "15",
+      "employee_name": "陳家茜 (Emily)",
+      "shift_start": "14:00",
+      "shift_end": "23:00",
+      "workstation": "B008",
+      "workstation_role": "烤手",
+      "leave_type": null
+    },
+    {
+      "date": "2026-03-11",
+      "day_of_week": "週三",
+      "employee_id": "16",
+      "employee_name": "張喬慈 (Pen)",
+      "shift_start": "10:00",
+      "shift_end": "20:00",
+      "workstation": "B103",
+      "workstation_role": "烤手",
+      "leave_type": null
+    },
+    {
+      "date": "2026-03-12",
+      "day_of_week": "週四",
+      "employee_id": "16",
+      "employee_name": "張喬慈 (Pen)",
+      "shift_start": "10:00",
+      "shift_end": "20:00",
+      "workstation": "B103",
+      "workstation_role": "烤手",
+      "leave_type": null
+    },
+    {
+      "date": "2026-03-13",
+      "day_of_week": "週五",
+      "employee_id": "16",
+      "employee_name": "張喬慈 (Pen)",
       "shift_start": "10:00",
       "shift_end": "20:00",
       "workstation": "B103",
@@ -696,72 +795,6 @@
     {
       "date": "2026-03-14",
       "day_of_week": "週六",
-      "employee_id": "14",
-      "employee_name": "江珮齡 (Jiang)",
-      "shift_start": "10:00",
-      "shift_end": "20:00",
-      "workstation": "B103",
-      "workstation_role": "烤手",
-      "leave_type": null
-    },
-    {
-      "date": "2026-03-09",
-      "day_of_week": "週一",
-      "employee_id": "15",
-      "employee_name": "陳家茜 (Emily)",
-      "shift_start": "14:00",
-      "shift_end": "23:00",
-      "workstation": "B008",
-      "workstation_role": "烤手",
-      "leave_type": null
-    },
-    {
-      "date": "2026-03-10",
-      "day_of_week": "週二",
-      "employee_id": "15",
-      "employee_name": "陳家茜 (Emily)",
-      "shift_start": "14:00",
-      "shift_end": "23:00",
-      "workstation": "B008",
-      "workstation_role": "烤手",
-      "leave_type": null
-    },
-    {
-      "date": "2026-03-11",
-      "day_of_week": "週三",
-      "employee_id": "15",
-      "employee_name": "陳家茜 (Emily)",
-      "shift_start": "14:00",
-      "shift_end": "23:00",
-      "workstation": "B008",
-      "workstation_role": "烤手",
-      "leave_type": null
-    },
-    {
-      "date": "2026-03-12",
-      "day_of_week": "週四",
-      "employee_id": "15",
-      "employee_name": "陳家茜 (Emily)",
-      "shift_start": "14:00",
-      "shift_end": "23:00",
-      "workstation": "B008",
-      "workstation_role": "烤手",
-      "leave_type": null
-    },
-    {
-      "date": "2026-03-13",
-      "day_of_week": "週五",
-      "employee_id": "15",
-      "employee_name": "陳家茜 (Emily)",
-      "shift_start": "14:00",
-      "shift_end": "23:00",
-      "workstation": "B008",
-      "workstation_role": "烤手",
-      "leave_type": null
-    },
-    {
-      "date": "2026-03-09",
-      "day_of_week": "週一",
       "employee_id": "16",
       "employee_name": "張喬慈 (Pen)",
       "shift_start": "10:00",
@@ -773,8 +806,8 @@
     {
       "date": "2026-03-10",
       "day_of_week": "週二",
-      "employee_id": "16",
-      "employee_name": "張喬慈 (Pen)",
+      "employee_id": "17",
+      "employee_name": "林妍秀 (Zara)",
       "shift_start": "10:00",
       "shift_end": "20:00",
       "workstation": "B103",
@@ -784,28 +817,6 @@
     {
       "date": "2026-03-11",
       "day_of_week": "週三",
-      "employee_id": "16",
-      "employee_name": "張喬慈 (Pen)",
-      "shift_start": "10:00",
-      "shift_end": "20:00",
-      "workstation": "B103",
-      "workstation_role": "烤手",
-      "leave_type": null
-    },
-    {
-      "date": "2026-03-15",
-      "day_of_week": "週日",
-      "employee_id": "16",
-      "employee_name": "張喬慈 (Pen)",
-      "shift_start": "10:00",
-      "shift_end": "20:00",
-      "workstation": "B103",
-      "workstation_role": "烤手",
-      "leave_type": null
-    },
-    {
-      "date": "2026-03-10",
-      "day_of_week": "週二",
       "employee_id": "17",
       "employee_name": "林妍秀 (Zara)",
       "shift_start": "11:00",
@@ -815,24 +826,13 @@
       "leave_type": null
     },
     {
-      "date": "2026-03-11",
-      "day_of_week": "週三",
-      "employee_id": "17",
-      "employee_name": "林妍秀 (Zara)",
-      "shift_start": "10:00",
-      "shift_end": "20:00",
-      "workstation": "B103",
-      "workstation_role": "烤手",
-      "leave_type": null
-    },
-    {
       "date": "2026-03-12",
       "day_of_week": "週四",
       "employee_id": "17",
       "employee_name": "林妍秀 (Zara)",
-      "shift_start": "10:00",
-      "shift_end": "20:00",
-      "workstation": "B103",
+      "shift_start": "11:00",
+      "shift_end": "21:00",
+      "workstation": "B104",
       "workstation_role": "烤手",
       "leave_type": null
     },
@@ -892,6 +892,28 @@
       "leave_type": null
     },
     {
+      "date": "2026-03-09",
+      "day_of_week": "週一",
+      "employee_id": "19",
+      "employee_name": "高珮綺 (Peggy(2))",
+      "shift_start": "11:00",
+      "shift_end": "21:00",
+      "workstation": "B104",
+      "workstation_role": "烤手",
+      "leave_type": null
+    },
+    {
+      "date": "2026-03-10",
+      "day_of_week": "週二",
+      "employee_id": "19",
+      "employee_name": "高珮綺 (Peggy(2))",
+      "shift_start": "14:00",
+      "shift_end": "23:00",
+      "workstation": "B008",
+      "workstation_role": "烤手",
+      "leave_type": null
+    },
+    {
       "date": "2026-03-11",
       "day_of_week": "週三",
       "employee_id": "19",
@@ -899,28 +921,6 @@
       "shift_start": "14:00",
       "shift_end": "23:00",
       "workstation": "B008",
-      "workstation_role": "烤手",
-      "leave_type": null
-    },
-    {
-      "date": "2026-03-12",
-      "day_of_week": "週四",
-      "employee_id": "19",
-      "employee_name": "高珮綺 (Peggy(2))",
-      "shift_start": "14:00",
-      "shift_end": "23:00",
-      "workstation": "B008",
-      "workstation_role": "烤手",
-      "leave_type": null
-    },
-    {
-      "date": "2026-03-13",
-      "day_of_week": "週五",
-      "employee_id": "19",
-      "employee_name": "高珮綺 (Peggy(2))",
-      "shift_start": "11:00",
-      "shift_end": "21:00",
-      "workstation": "B104",
       "workstation_role": "烤手",
       "leave_type": null
     },
@@ -947,19 +947,19 @@
       "leave_type": null
     },
     {
-      "date": "2026-03-11",
-      "day_of_week": "週三",
+      "date": "2026-03-09",
+      "day_of_week": "週一",
       "employee_id": "20",
       "employee_name": "嚴道昇 (Vinson)",
-      "shift_start": "11:00",
-      "shift_end": "21:00",
-      "workstation": "B104",
+      "shift_start": "16:00",
+      "shift_end": "01:00",
+      "workstation": "B010",
       "workstation_role": "烤手",
       "leave_type": null
     },
     {
-      "date": "2026-03-12",
-      "day_of_week": "週四",
+      "date": "2026-03-10",
+      "day_of_week": "週二",
       "employee_id": "20",
       "employee_name": "嚴道昇 (Vinson)",
       "shift_start": "11:00",
@@ -984,6 +984,17 @@
       "day_of_week": "週六",
       "employee_id": "20",
       "employee_name": "嚴道昇 (Vinson)",
+      "shift_start": "16:00",
+      "shift_end": "01:00",
+      "workstation": "B010",
+      "workstation_role": "烤手",
+      "leave_type": null
+    },
+    {
+      "date": "2026-03-15",
+      "day_of_week": "週日",
+      "employee_id": "20",
+      "employee_name": "嚴道昇 (Vinson)",
       "shift_start": "11:00",
       "shift_end": "21:00",
       "workstation": "B104",
@@ -991,8 +1002,8 @@
       "leave_type": null
     },
     {
-      "date": "2026-03-09",
-      "day_of_week": "週一",
+      "date": "2026-03-10",
+      "day_of_week": "週二",
       "employee_id": "21",
       "employee_name": "林政雄 (Mark)",
       "shift_start": "11:00",
@@ -1002,17 +1013,6 @@
       "leave_type": null
     },
     {
-      "date": "2026-03-10",
-      "day_of_week": "週二",
-      "employee_id": "21",
-      "employee_name": "林政雄 (Mark)",
-      "shift_start": "11:00",
-      "shift_end": "21:00",
-      "workstation": "B104",
-      "workstation_role": "烤手",
-      "leave_type": null
-    },
-    {
       "date": "2026-03-11",
       "day_of_week": "週三",
       "employee_id": "21",
@@ -1026,6 +1026,17 @@
     {
       "date": "2026-03-12",
       "day_of_week": "週四",
+      "employee_id": "21",
+      "employee_name": "林政雄 (Mark)",
+      "shift_start": "11:00",
+      "shift_end": "21:00",
+      "workstation": "B104",
+      "workstation_role": "烤手",
+      "leave_type": null
+    },
+    {
+      "date": "2026-03-13",
+      "day_of_week": "週五",
       "employee_id": "21",
       "employee_name": "林政雄 (Mark)",
       "shift_start": "11:00",
@@ -1123,8 +1134,8 @@
       "leave_type": null
     },
     {
-      "date": "2026-03-14",
-      "day_of_week": "週六",
+      "date": "2026-03-12",
+      "day_of_week": "週四",
       "employee_id": "23",
       "employee_name": "丁昱睿 (Ray)",
       "shift_start": "16:00",
@@ -1145,8 +1156,8 @@
       "leave_type": null
     },
     {
-      "date": "2026-03-09",
-      "day_of_week": "週一",
+      "date": "2026-03-11",
+      "day_of_week": "週三",
       "employee_id": "24",
       "employee_name": "崔羽訸 (Avery)",
       "shift_start": "15:00",
@@ -1156,8 +1167,8 @@
       "leave_type": null
     },
     {
-      "date": "2026-03-10",
-      "day_of_week": "週二",
+      "date": "2026-03-12",
+      "day_of_week": "週四",
       "employee_id": "24",
       "employee_name": "崔羽訸 (Avery)",
       "shift_start": "15:00",
@@ -1299,8 +1310,8 @@
       "leave_type": null
     },
     {
-      "date": "2026-03-11",
-      "day_of_week": "週三",
+      "date": "2026-03-09",
+      "day_of_week": "週一",
       "employee_id": "27",
       "employee_name": "李裕賓 (RB)",
       "shift_start": "15:00",
@@ -1310,8 +1321,8 @@
       "leave_type": null
     },
     {
-      "date": "2026-03-12",
-      "day_of_week": "週四",
+      "date": "2026-03-10",
+      "day_of_week": "週二",
       "employee_id": "27",
       "employee_name": "李裕賓 (RB)",
       "shift_start": "15:00",
@@ -1387,24 +1398,13 @@
       "leave_type": null
     },
     {
-      "date": "2026-03-13",
-      "day_of_week": "週五",
+      "date": "2026-03-15",
+      "day_of_week": "週日",
       "employee_id": "28",
       "employee_name": "何采苓 (Dory)",
       "shift_start": "16:00",
       "shift_end": "01:00",
       "workstation": "B010",
-      "workstation_role": "烤手",
-      "leave_type": null
-    },
-    {
-      "date": "2026-03-09",
-      "day_of_week": "週一",
-      "employee_id": "29",
-      "employee_name": "李汪哲 (William)",
-      "shift_start": "15:00",
-      "shift_end": "00:00",
-      "workstation": "B009",
       "workstation_role": "烤手",
       "leave_type": null
     },
@@ -1442,8 +1442,8 @@
       "leave_type": null
     },
     {
-      "date": "2026-03-15",
-      "day_of_week": "週日",
+      "date": "2026-03-13",
+      "day_of_week": "週五",
       "employee_id": "29",
       "employee_name": "李汪哲 (William)",
       "shift_start": "15:00",
@@ -1512,9 +1512,9 @@
       "day_of_week": "週四",
       "employee_id": "31",
       "employee_name": "江承壕 (Steven)",
-      "shift_start": "15:00",
-      "shift_end": "00:00",
-      "workstation": "B009",
+      "shift_start": "10:00",
+      "shift_end": "20:00",
+      "workstation": "B103",
       "workstation_role": "烤手",
       "leave_type": null
     },
@@ -1616,8 +1616,8 @@
       "5": 44.0,
       "6": 42.0,
       "7": 40.0,
-      "8": 44.0,
-      "9": 42.0,
+      "8": 40.0,
+      "9": 46.0,
       "10": 40.0,
       "11": 40.0,
       "12": 40.0,
@@ -1628,7 +1628,7 @@
       "17": 40.0,
       "18": 40.0,
       "19": 46.0,
-      "20": 40.0,
+      "20": 46.0,
       "21": 40.0,
       "22": 44.0,
       "23": 40.0,
@@ -1637,9 +1637,9 @@
       "26": 32.0,
       "27": 40.0,
       "28": 32.0,
-      "29": 40.0,
+      "29": 32.0,
       "30": 40.0,
-      "31": 38.0,
+      "31": 40.0,
       "32": 40.0,
       "33": 0.0,
       "34": 0.0,
