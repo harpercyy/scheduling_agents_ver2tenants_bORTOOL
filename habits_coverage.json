@@ -1,0 +1,31 @@
+{
+  "morning": {
+    "avg_headcount": 10.5,
+    "top_workstations": {
+      "B104": 36,
+      "B003": 24,
+      "B103": 22,
+      "B004": 12,
+      "櫃台": 11
+    }
+  },
+  "afternoon": {
+    "avg_headcount": 12.9,
+    "top_workstations": {
+      "B009": 27,
+      "B010": 19,
+      "B008": 18,
+      "B106": 14,
+      "櫃台": 5
+    }
+  },
+  "evening": {
+    "avg_headcount": 27.8,
+    "top_workstations": {
+      "B109": 7,
+      "櫃台": 7,
+      "B010": 4,
+      "B011": 4
+    }
+  }
+}

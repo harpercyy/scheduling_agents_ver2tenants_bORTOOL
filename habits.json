@@ -1,0 +1,1379 @@
+[
+  {
+    "employee_id": "1",
+    "chinese_name": "林靜宜",
+    "english_name": "Sherry",
+    "preferred_shifts": [
+      "B104",
+      "B106"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": null,
+    "rotation_flexibility": null,
+    "workstation_skills": [
+      "烤手"
+    ],
+    "avg_weekly_hours": 0.0,
+    "avg_shifts_per_week": 0.0,
+    "shift_frequency": {
+      "B104": 2
+    },
+    "workstation_frequency": {
+      "烤手": 2
+    }
+  },
+  {
+    "employee_id": "2",
+    "chinese_name": "李基雨",
+    "english_name": "Kiwoo",
+    "preferred_shifts": [
+      "afternoon",
+      "morning",
+      "evening"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": null,
+    "rotation_flexibility": null,
+    "workstation_skills": [
+      "烤手"
+    ],
+    "avg_weekly_hours": 22.0,
+    "avg_shifts_per_week": 5.5,
+    "shift_frequency": {
+      "afternoon": 7,
+      "morning": 3,
+      "evening": 1
+    },
+    "workstation_frequency": {}
+  },
+  {
+    "employee_id": "3",
+    "chinese_name": "史曜誠",
+    "english_name": "Money",
+    "preferred_shifts": [
+      "B106",
+      "B104",
+      "B008"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": null,
+    "rotation_flexibility": null,
+    "workstation_skills": [
+      "烤手"
+    ],
+    "avg_weekly_hours": 34.5,
+    "avg_shifts_per_week": 8.0,
+    "shift_frequency": {
+      "B104": 1,
+      "B008": 1,
+      "B106": 3
+    },
+    "workstation_frequency": {
+      "烤手": 5
+    }
+  },
+  {
+    "employee_id": "4",
+    "chinese_name": "黃妤婕",
+    "english_name": "Ada",
+    "preferred_shifts": [
+      "B003",
+      "B104"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": null,
+    "rotation_flexibility": null,
+    "workstation_skills": [
+      "烤手"
+    ],
+    "avg_weekly_hours": 29.0,
+    "avg_shifts_per_week": 7.0,
+    "shift_frequency": {
+      "B003": 3,
+      "B104": 2
+    },
+    "workstation_frequency": {
+      "烤手": 5
+    }
+  },
+  {
+    "employee_id": "5",
+    "chinese_name": "吳亭穎",
+    "english_name": "Ting",
+    "preferred_shifts": [
+      "B106",
+      "B008"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": null,
+    "rotation_flexibility": null,
+    "workstation_skills": [
+      "烤手"
+    ],
+    "avg_weekly_hours": 33.2,
+    "avg_shifts_per_week": 7.5,
+    "shift_frequency": {
+      "B008": 2,
+      "B106": 3
+    },
+    "workstation_frequency": {
+      "烤手": 5
+    }
+  },
+  {
+    "employee_id": "6",
+    "chinese_name": "范袁郡",
+    "english_name": "Eggsy",
+    "preferred_shifts": [
+      "B003"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": "flexible",
+    "rotation_flexibility": "full",
+    "workstation_skills": [
+      "烤手"
+    ],
+    "avg_weekly_hours": 37.0,
+    "avg_shifts_per_week": 8.0,
+    "shift_frequency": {
+      "B003": 6
+    },
+    "workstation_frequency": {
+      "烤手": 6
+    }
+  },
+  {
+    "employee_id": "7",
+    "chinese_name": "王倩雯",
+    "english_name": "Cooper",
+    "preferred_shifts": [
+      "B103"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": "fixed_overtime",
+    "rotation_flexibility": "morning_afternoon",
+    "workstation_skills": [
+      "烤手"
+    ],
+    "avg_weekly_hours": 30.5,
+    "avg_shifts_per_week": 7.0,
+    "shift_frequency": {
+      "B103": 1
+    },
+    "workstation_frequency": {
+      "烤手": 5
+    }
+  },
+  {
+    "employee_id": "8",
+    "chinese_name": "吳咨錞",
+    "english_name": "Tess",
+    "preferred_shifts": [
+      "B004",
+      "B103"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": "flexible",
+    "rotation_flexibility": "full",
+    "workstation_skills": [
+      "領檯早",
+      "烤手"
+    ],
+    "avg_weekly_hours": 39.2,
+    "avg_shifts_per_week": 9.0,
+    "shift_frequency": {
+      "B004": 1,
+      "B103": 1
+    },
+    "workstation_frequency": {
+      "烤手": 8
+    }
+  },
+  {
+    "employee_id": "9",
+    "chinese_name": "洪菀妤",
+    "english_name": "Leona",
+    "preferred_shifts": [
+      "B103"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": "fixed_overtime",
+    "rotation_flexibility": null,
+    "workstation_skills": [
+      "領檯早",
+      "烤手"
+    ],
+    "avg_weekly_hours": 30.8,
+    "avg_shifts_per_week": 7.0,
+    "shift_frequency": {
+      "B103": 4
+    },
+    "workstation_frequency": {
+      "烤手": 5
+    }
+  },
+  {
+    "employee_id": "10",
+    "chinese_name": "陸采葳",
+    "english_name": "Wina",
+    "preferred_shifts": [
+      "B103",
+      "B003",
+      "B104"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": "flexible",
+    "rotation_flexibility": "morning_afternoon",
+    "workstation_skills": [
+      "烤手"
+    ],
+    "avg_weekly_hours": 39.8,
+    "avg_shifts_per_week": 9.0,
+    "shift_frequency": {
+      "B103": 4,
+      "B104": 1,
+      "B003": 3
+    },
+    "workstation_frequency": {
+      "烤手": 8
+    }
+  },
+  {
+    "employee_id": "11",
+    "chinese_name": "歐文莉",
+    "english_name": "Josephine",
+    "preferred_shifts": [
+      "B104",
+      "B103",
+      "B008",
+      "B003"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": "fixed_overtime",
+    "rotation_flexibility": "full",
+    "workstation_skills": [
+      "烤手"
+    ],
+    "avg_weekly_hours": 36.0,
+    "avg_shifts_per_week": 8.0,
+    "shift_frequency": {
+      "B104": 2,
+      "B103": 2,
+      "B008": 1,
+      "B003": 1
+    },
+    "workstation_frequency": {
+      "烤手": 6
+    }
+  },
+  {
+    "employee_id": "12",
+    "chinese_name": "邱筱涵",
+    "english_name": "Amy",
+    "preferred_shifts": [
+      "B003",
+      "B103",
+      "B008"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": null,
+    "rotation_flexibility": "full",
+    "workstation_skills": [
+      "烤手"
+    ],
+    "avg_weekly_hours": 34.5,
+    "avg_shifts_per_week": 7.5,
+    "shift_frequency": {
+      "B103": 2,
+      "B008": 1,
+      "B003": 3
+    },
+    "workstation_frequency": {
+      "烤手": 6
+    }
+  },
+  {
+    "employee_id": "13",
+    "chinese_name": "黃培瑜",
+    "english_name": "Jacky",
+    "preferred_shifts": [
+      "B104",
+      "B103",
+      "B106",
+      "B010"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": "flexible",
+    "rotation_flexibility": "full",
+    "workstation_skills": [
+      "烤手"
+    ],
+    "avg_weekly_hours": 32.5,
+    "avg_shifts_per_week": 7.5,
+    "shift_frequency": {
+      "B104": 2,
+      "B103": 2,
+      "B106": 1,
+      "B010": 1
+    },
+    "workstation_frequency": {
+      "烤手": 6
+    }
+  },
+  {
+    "employee_id": "14",
+    "chinese_name": "江珮齡",
+    "english_name": "Jiang",
+    "preferred_shifts": [
+      "B104",
+      "B103",
+      "B008",
+      "B010"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": "flexible",
+    "rotation_flexibility": "full",
+    "workstation_skills": [
+      "烤手"
+    ],
+    "avg_weekly_hours": 37.8,
+    "avg_shifts_per_week": 9.0,
+    "shift_frequency": {
+      "B103": 1,
+      "B104": 4,
+      "B008": 1,
+      "B010": 1
+    },
+    "workstation_frequency": {
+      "烤手": 7
+    }
+  },
+  {
+    "employee_id": "15",
+    "chinese_name": "陳家茜",
+    "english_name": "Emily",
+    "preferred_shifts": [
+      "B008",
+      "B104",
+      "B106",
+      "B010"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": "flexible",
+    "rotation_flexibility": "full",
+    "workstation_skills": [
+      "烤手"
+    ],
+    "avg_weekly_hours": 34.0,
+    "avg_shifts_per_week": 8.5,
+    "shift_frequency": {
+      "B008": 2,
+      "B106": 1,
+      "B104": 2,
+      "B010": 1
+    },
+    "workstation_frequency": {
+      "烤手": 6
+    }
+  },
+  {
+    "employee_id": "16",
+    "chinese_name": "張喬慈",
+    "english_name": "Pen",
+    "preferred_shifts": [
+      "B103",
+      "B104",
+      "B003"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": "no_overtime",
+    "rotation_flexibility": null,
+    "workstation_skills": [
+      "烤手"
+    ],
+    "avg_weekly_hours": 30.5,
+    "avg_shifts_per_week": 7.5,
+    "shift_frequency": {
+      "B103": 3,
+      "B003": 1,
+      "B104": 2
+    },
+    "workstation_frequency": {
+      "烤手": 6
+    }
+  },
+  {
+    "employee_id": "17",
+    "chinese_name": "林妍秀",
+    "english_name": "Zara",
+    "preferred_shifts": [
+      "B104",
+      "B103"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": "no_overtime",
+    "rotation_flexibility": null,
+    "workstation_skills": [
+      "烤手"
+    ],
+    "avg_weekly_hours": 31.5,
+    "avg_shifts_per_week": 8.0,
+    "shift_frequency": {
+      "B104": 6,
+      "B103": 1
+    },
+    "workstation_frequency": {
+      "烤手": 7
+    }
+  },
+  {
+    "employee_id": "18",
+    "chinese_name": "胡伊昕",
+    "english_name": "Amber",
+    "preferred_shifts": [
+      "B104",
+      "B004",
+      "B103"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": "flexible",
+    "rotation_flexibility": null,
+    "workstation_skills": [
+      "烤手"
+    ],
+    "avg_weekly_hours": 30.0,
+    "avg_shifts_per_week": 7.5,
+    "shift_frequency": {
+      "B104": 3,
+      "B103": 1,
+      "B004": 2
+    },
+    "workstation_frequency": {
+      "烤手": 6
+    }
+  },
+  {
+    "employee_id": "19",
+    "chinese_name": "高珮綺",
+    "english_name": "Peggy(2)",
+    "preferred_shifts": [
+      "B104",
+      "B109",
+      "B007",
+      "B008"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": "flexible",
+    "rotation_flexibility": "full",
+    "workstation_skills": [
+      "烤手"
+    ],
+    "avg_weekly_hours": 24.5,
+    "avg_shifts_per_week": 6.0,
+    "shift_frequency": {
+      "B104": 2,
+      "B109": 1,
+      "B007": 1,
+      "B008": 1
+    },
+    "workstation_frequency": {
+      "烤手": 5
+    }
+  },
+  {
+    "employee_id": "20",
+    "chinese_name": "嚴道昇",
+    "english_name": "Vinson",
+    "preferred_shifts": [
+      "B104",
+      "B010",
+      "B109"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": "flexible",
+    "rotation_flexibility": "full",
+    "workstation_skills": [
+      "烤手"
+    ],
+    "avg_weekly_hours": 23.0,
+    "avg_shifts_per_week": 5.5,
+    "shift_frequency": {
+      "B104": 2,
+      "B010": 2,
+      "B109": 1
+    },
+    "workstation_frequency": {
+      "烤手": 5
+    }
+  },
+  {
+    "employee_id": "21",
+    "chinese_name": "林政雄",
+    "english_name": "Mark",
+    "preferred_shifts": [
+      "B104",
+      "B009",
+      "B010",
+      "B011"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": "no_overtime",
+    "rotation_flexibility": "full",
+    "workstation_skills": [
+      "烤手"
+    ],
+    "avg_weekly_hours": 35.5,
+    "avg_shifts_per_week": 9.0,
+    "shift_frequency": {
+      "B104": 2,
+      "B009": 2,
+      "B010": 2,
+      "B011": 1
+    },
+    "workstation_frequency": {
+      "烤手": 7
+    }
+  },
+  {
+    "employee_id": "22",
+    "chinese_name": "周家鋐",
+    "english_name": "Tommy",
+    "preferred_shifts": [
+      "B010",
+      "B106",
+      "B104",
+      "B009",
+      "B109"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": "no_overtime",
+    "rotation_flexibility": "full",
+    "workstation_skills": [
+      "烤手"
+    ],
+    "avg_weekly_hours": 33.0,
+    "avg_shifts_per_week": 7.5,
+    "shift_frequency": {
+      "B106": 1,
+      "B104": 1,
+      "B009": 1,
+      "B109": 1,
+      "B010": 2
+    },
+    "workstation_frequency": {
+      "烤手": 6
+    }
+  },
+  {
+    "employee_id": "23",
+    "chinese_name": "丁昱睿",
+    "english_name": "Ray",
+    "preferred_shifts": [
+      "B010",
+      "B009"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": "fixed_overtime",
+    "rotation_flexibility": "full",
+    "workstation_skills": [
+      "烤手"
+    ],
+    "avg_weekly_hours": 38.5,
+    "avg_shifts_per_week": 8.5,
+    "shift_frequency": {
+      "B010": 1,
+      "B009": 1
+    },
+    "workstation_frequency": {
+      "烤手": 7
+    }
+  },
+  {
+    "employee_id": "24",
+    "chinese_name": "崔羽訸",
+    "english_name": "Avery",
+    "preferred_shifts": [
+      "B009",
+      "B109"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": "fixed_overtime",
+    "rotation_flexibility": "full",
+    "workstation_skills": [
+      "烤手"
+    ],
+    "avg_weekly_hours": 30.5,
+    "avg_shifts_per_week": 7.0,
+    "shift_frequency": {
+      "B009": 4,
+      "B109": 1
+    },
+    "workstation_frequency": {
+      "烤手": 6
+    }
+  },
+  {
+    "employee_id": "25",
+    "chinese_name": "趙翊蓁",
+    "english_name": "Jaclyn",
+    "preferred_shifts": [
+      "B106",
+      "B009"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": "fixed_overtime",
+    "rotation_flexibility": null,
+    "workstation_skills": [
+      "領檯晚",
+      "烤手"
+    ],
+    "avg_weekly_hours": 34.8,
+    "avg_shifts_per_week": 7.5,
+    "shift_frequency": {
+      "B009": 1,
+      "B106": 3
+    },
+    "workstation_frequency": {
+      "烤手": 8
+    }
+  },
+  {
+    "employee_id": "26",
+    "chinese_name": "譚憶樺",
+    "english_name": "Rita",
+    "preferred_shifts": [
+      "B010",
+      "B009",
+      "B011"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": "no_overtime",
+    "rotation_flexibility": "full",
+    "workstation_skills": [
+      "領檯晚",
+      "烤手"
+    ],
+    "avg_weekly_hours": 36.5,
+    "avg_shifts_per_week": 8.5,
+    "shift_frequency": {
+      "B009": 2,
+      "B010": 3,
+      "B011": 1
+    },
+    "workstation_frequency": {
+      "烤手": 8
+    }
+  },
+  {
+    "employee_id": "27",
+    "chinese_name": "李裕賓",
+    "english_name": "RB",
+    "preferred_shifts": [
+      "B009",
+      "B109",
+      "B010"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": "flexible",
+    "rotation_flexibility": "full",
+    "workstation_skills": [
+      "烤手"
+    ],
+    "avg_weekly_hours": 30.5,
+    "avg_shifts_per_week": 7.0,
+    "shift_frequency": {
+      "B009": 4,
+      "B109": 1,
+      "B010": 1
+    },
+    "workstation_frequency": {
+      "烤手": 6
+    }
+  },
+  {
+    "employee_id": "28",
+    "chinese_name": "何采苓",
+    "english_name": "Dory",
+    "preferred_shifts": [
+      "B010",
+      "B009",
+      "B011"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": "flexible",
+    "rotation_flexibility": "full",
+    "workstation_skills": [
+      "烤手"
+    ],
+    "avg_weekly_hours": 36.5,
+    "avg_shifts_per_week": 8.5,
+    "shift_frequency": {
+      "B010": 3,
+      "B009": 3,
+      "B011": 1
+    },
+    "workstation_frequency": {
+      "烤手": 7
+    }
+  },
+  {
+    "employee_id": "29",
+    "chinese_name": "李汪哲",
+    "english_name": "William",
+    "preferred_shifts": [
+      "B009",
+      "B010",
+      "B109"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": "fixed_overtime",
+    "rotation_flexibility": "full",
+    "workstation_skills": [
+      "烤手"
+    ],
+    "avg_weekly_hours": 33.5,
+    "avg_shifts_per_week": 7.5,
+    "shift_frequency": {
+      "B010": 1,
+      "B009": 4,
+      "B109": 1
+    },
+    "workstation_frequency": {
+      "烤手": 6
+    }
+  },
+  {
+    "employee_id": "30",
+    "chinese_name": "江佩諭",
+    "english_name": "Peggy(1)",
+    "preferred_shifts": [
+      "B010",
+      "B009",
+      "B109"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": "flexible",
+    "rotation_flexibility": "full",
+    "workstation_skills": [
+      "烤手"
+    ],
+    "avg_weekly_hours": 29.0,
+    "avg_shifts_per_week": 7.0,
+    "shift_frequency": {
+      "B010": 4,
+      "B009": 1,
+      "B109": 1
+    },
+    "workstation_frequency": {
+      "烤手": 6
+    }
+  },
+  {
+    "employee_id": "31",
+    "chinese_name": "江承壕",
+    "english_name": "Steven",
+    "preferred_shifts": [
+      "B106",
+      "B009"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": "flexible",
+    "rotation_flexibility": null,
+    "workstation_skills": [
+      "烤手"
+    ],
+    "avg_weekly_hours": 32.5,
+    "avg_shifts_per_week": 7.5,
+    "shift_frequency": {
+      "B106": 1,
+      "B009": 1
+    },
+    "workstation_frequency": {
+      "烤手": 2
+    }
+  },
+  {
+    "employee_id": "32",
+    "chinese_name": "蔡啟德",
+    "english_name": "Eric",
+    "preferred_shifts": [
+      "B009",
+      "B010",
+      "B008",
+      "B106"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": "flexible",
+    "rotation_flexibility": "full",
+    "workstation_skills": [
+      "烤手"
+    ],
+    "avg_weekly_hours": 28.0,
+    "avg_shifts_per_week": 7.0,
+    "shift_frequency": {
+      "B009": 3,
+      "B010": 1,
+      "B008": 1,
+      "B106": 1
+    },
+    "workstation_frequency": {
+      "服務": 6
+    }
+  },
+  {
+    "employee_id": "33",
+    "chinese_name": "林巧敏",
+    "english_name": "Candy",
+    "preferred_shifts": [
+      "B008",
+      "B011"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": "flexible",
+    "rotation_flexibility": null,
+    "workstation_skills": [
+      "服務"
+    ],
+    "avg_weekly_hours": 14.0,
+    "avg_shifts_per_week": 3.5,
+    "shift_frequency": {
+      "B008": 1,
+      "B011": 1
+    },
+    "workstation_frequency": {
+      "服務": 2
+    }
+  },
+  {
+    "employee_id": "34",
+    "chinese_name": "莊侑霖",
+    "english_name": "Tony",
+    "preferred_shifts": [
+      "B004",
+      "B008",
+      "B106"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": null,
+    "rotation_flexibility": null,
+    "workstation_skills": [
+      "服務"
+    ],
+    "avg_weekly_hours": 30.0,
+    "avg_shifts_per_week": 8.0,
+    "shift_frequency": {
+      "B004": 4,
+      "B008": 3,
+      "B106": 1
+    },
+    "workstation_frequency": {
+      "服務": 8
+    }
+  },
+  {
+    "employee_id": "35",
+    "chinese_name": "鄭子怡",
+    "english_name": "Zooey",
+    "preferred_shifts": [
+      "B008",
+      "B004",
+      "B003"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": null,
+    "rotation_flexibility": null,
+    "workstation_skills": [
+      "服務"
+    ],
+    "avg_weekly_hours": 34.0,
+    "avg_shifts_per_week": 8.5,
+    "shift_frequency": {
+      "B008": 4,
+      "B004": 3,
+      "B003": 2
+    },
+    "workstation_frequency": {
+      "服務": 9
+    }
+  },
+  {
+    "employee_id": "36",
+    "chinese_name": "陳金燕",
+    "english_name": "Yan",
+    "preferred_shifts": [
+      "B104",
+      "B004"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": "no_overtime",
+    "rotation_flexibility": null,
+    "workstation_skills": [
+      "服務"
+    ],
+    "avg_weekly_hours": 16.0,
+    "avg_shifts_per_week": 4.0,
+    "shift_frequency": {
+      "B104": 2,
+      "B004": 2
+    },
+    "workstation_frequency": {
+      "服務": 4
+    }
+  },
+  {
+    "employee_id": "37",
+    "chinese_name": "彭雅伶",
+    "english_name": "AT",
+    "preferred_shifts": [
+      "B003"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": null,
+    "rotation_flexibility": null,
+    "workstation_skills": [
+      "服務"
+    ],
+    "avg_weekly_hours": 20.0,
+    "avg_shifts_per_week": 5.0,
+    "shift_frequency": {
+      "B003": 5
+    },
+    "workstation_frequency": {
+      "服務": 5
+    }
+  },
+  {
+    "employee_id": "38",
+    "chinese_name": "江靜雯",
+    "english_name": "Asa",
+    "preferred_shifts": [
+      "morning",
+      "evening"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": null,
+    "rotation_flexibility": null,
+    "workstation_skills": [
+      "服務"
+    ],
+    "avg_weekly_hours": 12.0,
+    "avg_shifts_per_week": 3.0,
+    "shift_frequency": {
+      "morning": 3,
+      "evening": 3
+    },
+    "workstation_frequency": {}
+  },
+  {
+    "employee_id": "39",
+    "chinese_name": "李岱芹",
+    "english_name": "Joyce",
+    "preferred_shifts": [
+      "evening",
+      "morning",
+      "afternoon"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": null,
+    "rotation_flexibility": null,
+    "workstation_skills": [
+      "服務"
+    ],
+    "avg_weekly_hours": 34.0,
+    "avg_shifts_per_week": 8.5,
+    "shift_frequency": {
+      "morning": 5,
+      "evening": 9,
+      "afternoon": 3
+    },
+    "workstation_frequency": {}
+  },
+  {
+    "employee_id": "40",
+    "chinese_name": "陳詠茹",
+    "english_name": "Yuki",
+    "preferred_shifts": [
+      "evening",
+      "afternoon",
+      "morning"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": null,
+    "rotation_flexibility": null,
+    "workstation_skills": [
+      "服務"
+    ],
+    "avg_weekly_hours": 21.2,
+    "avg_shifts_per_week": 5.5,
+    "shift_frequency": {
+      "afternoon": 3,
+      "evening": 6,
+      "morning": 2
+    },
+    "workstation_frequency": {}
+  },
+  {
+    "employee_id": "41",
+    "chinese_name": "李君蔓",
+    "english_name": "Alisa",
+    "preferred_shifts": [
+      "morning",
+      "afternoon",
+      "evening"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": null,
+    "rotation_flexibility": null,
+    "workstation_skills": [
+      "服務"
+    ],
+    "avg_weekly_hours": 20.0,
+    "avg_shifts_per_week": 5.5,
+    "shift_frequency": {
+      "morning": 7,
+      "afternoon": 2,
+      "evening": 2
+    },
+    "workstation_frequency": {}
+  },
+  {
+    "employee_id": "42",
+    "chinese_name": "潘佳玥",
+    "english_name": "Coco",
+    "preferred_shifts": [
+      "evening",
+      "morning",
+      "afternoon"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": null,
+    "rotation_flexibility": null,
+    "workstation_skills": [
+      "服務"
+    ],
+    "avg_weekly_hours": 31.8,
+    "avg_shifts_per_week": 9.0,
+    "shift_frequency": {
+      "morning": 8,
+      "evening": 9,
+      "afternoon": 1
+    },
+    "workstation_frequency": {}
+  },
+  {
+    "employee_id": "43",
+    "chinese_name": "楊雅芸",
+    "english_name": "Yang",
+    "preferred_shifts": [],
+    "available_hour_range": null,
+    "overtime_willingness": null,
+    "rotation_flexibility": null,
+    "workstation_skills": [
+      "服務"
+    ],
+    "avg_weekly_hours": 0.0,
+    "avg_shifts_per_week": 0.0,
+    "shift_frequency": {},
+    "workstation_frequency": {}
+  },
+  {
+    "employee_id": "44",
+    "chinese_name": "謝侑珍",
+    "english_name": "Youjin",
+    "preferred_shifts": [
+      "evening",
+      "afternoon"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": null,
+    "rotation_flexibility": null,
+    "workstation_skills": [
+      "服務"
+    ],
+    "avg_weekly_hours": 15.0,
+    "avg_shifts_per_week": 4.5,
+    "shift_frequency": {
+      "evening": 7,
+      "afternoon": 2
+    },
+    "workstation_frequency": {}
+  },
+  {
+    "employee_id": "45",
+    "chinese_name": "林修華",
+    "english_name": "Jodie",
+    "preferred_shifts": [
+      "evening",
+      "afternoon"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": null,
+    "rotation_flexibility": null,
+    "workstation_skills": [
+      "服務"
+    ],
+    "avg_weekly_hours": 17.2,
+    "avg_shifts_per_week": 6.5,
+    "shift_frequency": {
+      "evening": 12,
+      "afternoon": 1
+    },
+    "workstation_frequency": {}
+  },
+  {
+    "employee_id": "47",
+    "chinese_name": "陳采盈",
+    "english_name": "Mira",
+    "preferred_shifts": [
+      "morning"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": null,
+    "rotation_flexibility": null,
+    "workstation_skills": [
+      "服務"
+    ],
+    "avg_weekly_hours": 6.0,
+    "avg_shifts_per_week": 1.5,
+    "shift_frequency": {
+      "morning": 3
+    },
+    "workstation_frequency": {}
+  },
+  {
+    "employee_id": "48",
+    "chinese_name": "高廉傑",
+    "english_name": "Jie",
+    "preferred_shifts": [
+      "evening"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": null,
+    "rotation_flexibility": null,
+    "workstation_skills": [
+      "服務"
+    ],
+    "avg_weekly_hours": 13.0,
+    "avg_shifts_per_week": 4.0,
+    "shift_frequency": {
+      "evening": 8
+    },
+    "workstation_frequency": {}
+  },
+  {
+    "employee_id": "49",
+    "chinese_name": "梁櫻繻",
+    "english_name": "Inn",
+    "preferred_shifts": [
+      "evening"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": null,
+    "rotation_flexibility": null,
+    "workstation_skills": [
+      "服務"
+    ],
+    "avg_weekly_hours": 25.5,
+    "avg_shifts_per_week": 8.0,
+    "shift_frequency": {
+      "evening": 16
+    },
+    "workstation_frequency": {}
+  },
+  {
+    "employee_id": "50",
+    "chinese_name": "黃威澔",
+    "english_name": "Hao",
+    "preferred_shifts": [
+      "evening",
+      "afternoon"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": null,
+    "rotation_flexibility": null,
+    "workstation_skills": [
+      "服務"
+    ],
+    "avg_weekly_hours": 25.2,
+    "avg_shifts_per_week": 7.5,
+    "shift_frequency": {
+      "evening": 13,
+      "afternoon": 2
+    },
+    "workstation_frequency": {}
+  },
+  {
+    "employee_id": "51",
+    "chinese_name": "陳鋒陽",
+    "english_name": "Ryan",
+    "preferred_shifts": [
+      "afternoon",
+      "evening"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": null,
+    "rotation_flexibility": null,
+    "workstation_skills": [
+      "服務"
+    ],
+    "avg_weekly_hours": 31.5,
+    "avg_shifts_per_week": 8.0,
+    "shift_frequency": {
+      "afternoon": 8,
+      "evening": 8
+    },
+    "workstation_frequency": {}
+  },
+  {
+    "employee_id": "52",
+    "chinese_name": "林欣儀",
+    "english_name": "Cindy",
+    "preferred_shifts": [
+      "evening",
+      "afternoon"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": null,
+    "rotation_flexibility": null,
+    "workstation_skills": [
+      "服務"
+    ],
+    "avg_weekly_hours": 25.5,
+    "avg_shifts_per_week": 6.5,
+    "shift_frequency": {
+      "afternoon": 6,
+      "evening": 7
+    },
+    "workstation_frequency": {}
+  },
+  {
+    "employee_id": "53",
+    "chinese_name": "周雨歡",
+    "english_name": "Mei",
+    "preferred_shifts": [
+      "evening"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": null,
+    "rotation_flexibility": null,
+    "workstation_skills": [
+      "服務"
+    ],
+    "avg_weekly_hours": 30.0,
+    "avg_shifts_per_week": 8.0,
+    "shift_frequency": {
+      "evening": 8
+    },
+    "workstation_frequency": {}
+  },
+  {
+    "employee_id": "60",
+    "chinese_name": "王子昂",
+    "english_name": "Andrew",
+    "preferred_shifts": [],
+    "available_hour_range": null,
+    "overtime_willingness": null,
+    "rotation_flexibility": null,
+    "workstation_skills": [
+      "服務"
+    ],
+    "avg_weekly_hours": 0.0,
+    "avg_shifts_per_week": 0.0,
+    "shift_frequency": {},
+    "workstation_frequency": {}
+  },
+  {
+    "employee_id": "61",
+    "chinese_name": "沈欣郁",
+    "english_name": "Sabrina",
+    "preferred_shifts": [],
+    "available_hour_range": null,
+    "overtime_willingness": null,
+    "rotation_flexibility": null,
+    "workstation_skills": [
+      "服務"
+    ],
+    "avg_weekly_hours": 0.0,
+    "avg_shifts_per_week": 0.0,
+    "shift_frequency": {},
+    "workstation_frequency": {}
+  },
+  {
+    "employee_id": "62",
+    "chinese_name": "馮宇彤",
+    "english_name": "Croissant",
+    "preferred_shifts": [
+      "evening",
+      "morning"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": null,
+    "rotation_flexibility": null,
+    "workstation_skills": [
+      "服務"
+    ],
+    "avg_weekly_hours": 2.0,
+    "avg_shifts_per_week": 0.5,
+    "shift_frequency": {
+      "evening": 3,
+      "morning": 2
+    },
+    "workstation_frequency": {}
+  },
+  {
+    "employee_id": "63",
+    "chinese_name": "張孟涵",
+    "english_name": "Hannah",
+    "preferred_shifts": [
+      "evening"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": null,
+    "rotation_flexibility": null,
+    "workstation_skills": [
+      "服務"
+    ],
+    "avg_weekly_hours": 10.0,
+    "avg_shifts_per_week": 4.0,
+    "shift_frequency": {
+      "evening": 8
+    },
+    "workstation_frequency": {}
+  },
+  {
+    "employee_id": "67",
+    "chinese_name": "樊昱岑",
+    "english_name": "Hitachi",
+    "preferred_shifts": [
+      "evening"
+    ],
+    "available_hour_range": null,
+    "overtime_willingness": null,
+    "rotation_flexibility": null,
+    "workstation_skills": [
+      "服務"
+    ],
+    "avg_weekly_hours": 10.0,
+    "avg_shifts_per_week": 4.0,
+    "shift_frequency": {
+      "evening": 8
+    },
+    "workstation_frequency": {}
+  },
+  {
+    "employee_id": "71",
+    "chinese_name": "李家豪",
+    "english_name": "Johnson",
+    "preferred_shifts": [],
+    "available_hour_range": null,
+    "overtime_willingness": null,
+    "rotation_flexibility": null,
+    "workstation_skills": [
+      "服務"
+    ],
+    "avg_weekly_hours": 0.0,
+    "avg_shifts_per_week": 0.0,
+    "shift_frequency": {},
+    "workstation_frequency": {}
+  }
+]

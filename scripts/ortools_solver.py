@@ -1,0 +1,1143 @@
+#!/usr/bin/env python3
+"""
+ortools_solver.py — Scheduler Agent: Demand-Aware CP-SAT Shift Scheduler.
+
+Reads habits_demand_shift.json to determine which shift codes (B003, B104, 櫃台(早)…)
+are needed, and in what quantities, for each of 4 staffing scenarios:
+  平日 / 平日包場 / 週末 / 週末包場
+
+For each day of the target week:
+  1. Determine its scenario (weekday/weekend × has-event/no-event)
+  2. Load required headcounts per shift code from the demand profile
+  3. Build CP-SAT constraints to meet those headcounts
+
+Scenarios covered:
+  S3: Automated Schedule Generation
+  S4: Constraint-aware / Demand-driven Scheduling
+  S5: Retry with relaxed constraints on INFEASIBLE
+"""
+
+import json
+import sys
+import os
+import csv
+import re
+from datetime import datetime, timedelta
+from collections import defaultdict
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from data_loader import Habit, ScheduleEntry, load_habits_json, merge_staff_roles
+
+try:
+    from ortools.sat.python import cp_model
+except ImportError:
+    print("❌ 請先安裝 ortools: pip install ortools")
+    sys.exit(1)
+
+
+# ─── Shift Definitions (from 班次.csv) ────────────────────────────────────────
+
+SHIFT_DEFS = {
+    # 正職 8h (休1H)
+    "B001": {"start": "08:00", "end": "17:00", "hours": 8},
+    "B002": {"start": "09:00", "end": "18:00", "hours": 8},
+    "B003": {"start": "10:00", "end": "19:00", "hours": 8},
+    "B004": {"start": "11:00", "end": "20:00", "hours": 8},
+    "B005": {"start": "11:30", "end": "20:30", "hours": 8},
+    "B006": {"start": "12:00", "end": "21:00", "hours": 8},
+    "B007": {"start": "13:00", "end": "22:00", "hours": 8},
+    "B008": {"start": "14:00", "end": "23:00", "hours": 8},
+    "B009": {"start": "15:00", "end": "00:00", "hours": 8},
+    "B010": {"start": "16:00", "end": "01:00", "hours": 8},
+    "B011": {"start": "17:00", "end": "02:00", "hours": 8},
+    "B012": {"start": "18:00", "end": "03:00", "hours": 8},
+    # 正職 10h (休2H)
+    "B101": {"start": "08:00", "end": "18:00", "hours": 10},
+    "B102": {"start": "09:00", "end": "19:00", "hours": 10},
+    "B103": {"start": "10:00", "end": "20:00", "hours": 10},
+    "B104": {"start": "11:00", "end": "21:00", "hours": 10},
+    "B105": {"start": "11:30", "end": "21:30", "hours": 10},
+    "B106": {"start": "12:00", "end": "22:00", "hours": 10},
+    "B107": {"start": "13:00", "end": "23:00", "hours": 10},
+    "B108": {"start": "14:00", "end": "00:00", "hours": 10},
+    "B109": {"start": "15:00", "end": "01:00", "hours": 10},
+    # 兼職
+    "C002": {"start": "10:00", "end": "17:00", "hours": 6},
+    "C005": {"start": "11:00", "end": "21:00", "hours": 8},
+    "C007": {"start": "12:00", "end": "22:00", "hours": 8},
+    "C101": {"start": "15:00", "end": "00:00", "hours": 8},
+    "C102": {"start": "16:00", "end": "23:00", "hours": 6.5},
+    "C104": {"start": "16:00", "end": "02:00", "hours": 8},
+    "C105": {"start": "17:00", "end": "23:00", "hours": 5.5},
+    "C106": {"start": "18:00", "end": "22:00", "hours": 4},
+    "C107": {"start": "19:00", "end": "23:00", "hours": 4},
+    "C108": {"start": "20:00", "end": "00:00", "hours": 4},
+    "C109": {"start": "10:00", "end": "14:00", "hours": 4},
+    "C110": {"start": "10:00", "end": "14:00", "hours": 3.5},
+    "C111": {"start": "14:00", "end": "23:00", "hours": 8},
+    "C112": {"start": "16:00", "end": "01:00", "hours": 8},
+    "C113": {"start": "19:00", "end": "01:00", "hours": 5.5},
+    # 櫃台 (split into early/late)
+    "櫃台(早)": {"start": "10:00", "end": "21:00", "hours": 8},
+    "櫃台(晚)": {"start": "15:00", "end": "01:00", "hours": 8},
+}
+
+MIN_REST_HOURS = 11
+MAX_WEEKLY_HOURS = 46
+STD_WEEKLY_HOURS = 40
+DAYS_TW = ["週一", "週二", "週三", "週四", "週五", "週六", "週日"]
+
+TW_HOLIDAYS_2026 = {
+    "2026-01-01", "2026-01-26", "2026-01-27", "2026-01-28", "2026-01-29",
+    "2026-01-30", "2026-01-31", "2026-02-01", "2026-02-28", "2026-04-04",
+    "2026-04-05", "2026-05-01", "2026-06-19", "2026-09-29", "2026-10-10",
+}
+
+# ─── Scenario Detection ───────────────────────────────────────────────────────
+
+def is_holiday(date_str: str) -> bool:
+    try:
+        d = datetime.strptime(date_str, "%Y-%m-%d")
+        return d.weekday() >= 5 or date_str in TW_HOLIDAYS_2026
+    except ValueError:
+        return False
+
+
+def load_package_dates(tenant_dir: str) -> set:
+    """Load 包場 dates from events.json, return as set of 'YYYY-MM-DD' strings."""
+    pkg = set()
+    if not tenant_dir:
+        return pkg
+    events_path = os.path.join(tenant_dir, "events.json")
+    if os.path.exists(events_path):
+        with open(events_path, encoding="utf-8") as f:
+            data = json.load(f)
+        for d in data.get("package_dates", []):
+            d = d.strip()
+            if re.match(r"^\d{4}-\d{2}-\d{2}$", d):
+                pkg.add(d)
+            else:
+                # Short form M-D → try to resolve
+                try:
+                    m, day = map(int, d.split("-"))
+                    year = 2026 if m <= 6 else 2025
+                    pkg.add(f"{year}-{m:02d}-{day:02d}")
+                except Exception:
+                    pass
+    return pkg
+
+
+def get_scenario(date_str: str, package_dates: set) -> str:
+    hol = is_holiday(date_str)
+    pkg = date_str in package_dates
+    if hol and pkg:  return "週末包場"
+    if hol:          return "週末"
+    if pkg:          return "平日包場"
+    return "平日"
+
+
+# ─── Rest Days & Manager Config Loaders ──────────────────────────────────────
+
+def load_rest_days(path: str, week_start: str, num_days: int = 7) -> dict:
+    """
+    Load designated rest days from rest_days.json.
+    Returns {employee_id: set of day_indices} where day_index is 0..6.
+    """
+    result = {}
+    if not path or not os.path.exists(path):
+        return result
+
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+
+    designated = data.get("designated_rest", {})
+    ws = datetime.strptime(week_start, "%Y-%m-%d")
+
+    for emp_id, dates in designated.items():
+        day_indices = set()
+        for date_str in dates:
+            try:
+                d = datetime.strptime(date_str, "%Y-%m-%d")
+                diff = (d - ws).days
+                if 0 <= diff < num_days:
+                    day_indices.add(diff)
+            except ValueError:
+                pass
+        if day_indices:
+            result[emp_id] = day_indices
+
+    return result
+
+
+def load_manager_config(staff_roles_path: str) -> dict:
+    """
+    Load _manager_group and _no_same_rest config from staff_roles.json.
+    Returns a dict with manager group settings and no_same_rest pairs.
+    """
+    if not staff_roles_path or not os.path.exists(staff_roles_path):
+        return {}
+    with open(staff_roles_path, encoding="utf-8") as f:
+        data = json.load(f)
+    config = data.get("_manager_group", {})
+    config["no_same_rest"] = data.get("_no_same_rest", [])
+    return config
+
+
+def load_prev_tail(prev_schedule_path: str, habits: list) -> dict:
+    """
+    Load the previous week's schedule and extract the last 4 days per employee.
+    Returns: { employee_id: {"working": [bool x4], "last_shift": str|None} }
+    The 4 booleans correspond to day[-4], day[-3], day[-2], day[-1] of the previous week.
+    """
+    if not prev_schedule_path or not os.path.exists(prev_schedule_path):
+        return {}
+
+    # Load entries from CSV or JSON
+    if prev_schedule_path.endswith(".json"):
+        with open(prev_schedule_path, encoding="utf-8") as f:
+            data = json.load(f)
+        entries = data.get("schedule", data) if isinstance(data, dict) else data
+    else:
+        entries = []
+        with open(prev_schedule_path, encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                entries.append(row)
+
+    if not entries:
+        return {}
+
+    # Determine the last 4 dates in the previous schedule
+    all_dates = sorted(set(e.get("date", "") for e in entries if e.get("date")))
+    if not all_dates:
+        return {}
+    tail_dates = all_dates[-4:] if len(all_dates) >= 4 else all_dates
+
+    # Build working set per employee per date
+    working_by_emp_date = defaultdict(dict)  # {emp_id: {date: shift_code}}
+    for e in entries:
+        eid = e.get("employee_id", "")
+        date = e.get("date", "")
+        leave = e.get("leave_type", "")
+        if eid and date and not leave:
+            working_by_emp_date[eid][date] = e.get("workstation", "")
+
+    # Build prev_tail for each employee referenced in habits
+    result = {}
+    emp_ids = set(h.employee_id for h in habits)
+    for eid in emp_ids:
+        emp_dates = working_by_emp_date.get(eid, {})
+        # Build 4-element boolean array (pad with False if fewer than 4 days)
+        working = []
+        last_shift = None
+        for d in tail_dates:
+            if d in emp_dates:
+                working.append(True)
+                last_shift = emp_dates[d]
+            else:
+                working.append(False)
+                last_shift = None
+        # Pad front with False if fewer than 4 tail days
+        while len(working) < 4:
+            working.insert(0, False)
+        # last_shift is from the very last date
+        last_date = tail_dates[-1]
+        last_shift = emp_dates.get(last_date)
+        result[eid] = {"working": working[-4:], "last_shift": last_shift}
+
+    return result
+
+
+# ─── Demand-Shift Profile ─────────────────────────────────────────────────────
+
+def load_demand_profile(demand_path: str) -> dict:
+    """
+    Load habits_demand_shift.json.
+    Returns: {scenario: {role: {shift_code: required_headcount}}}
+    """
+    with open(demand_path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def get_day_requirements(scenario: str, demand_profile: dict) -> list:
+    """
+    For a given scenario, return a flat list of required shift slots:
+      [{"shift_code": "B104", "role": "烤手", "required": 4}, ...]
+
+    Each entry represents ONE shift slot that needs `required` staff assigned.
+    We create one slot per shift code × required count (flattened so the solver
+    can treat each slot independently).
+
+    """
+    profile = demand_profile.get(scenario, {})
+    slots = []
+    for role, shift_counts in profile.items():
+        for shift_code, count in shift_counts.items():
+            slots.append({
+                "shift_code": shift_code,
+                "role": role,
+                "required": count,
+            })
+    return slots
+
+# ─── Workstation Role Helper ──────────────────────────────────────────────────
+
+WORKSTATION_ROLE_MAP = {
+    **{f"B{n:03d}": "烤手" for n in range(1, 13)},
+    **{f"B1{n:02d}": "烤手" for n in range(1, 10)},
+    "櫃台(早)": "領檯早",
+    "櫃台(晚)": "領檯晚",
+}
+
+
+def shift_code_to_role(shift_code: str) -> str:
+    """Map a shift code to its workstation role (烤手 / 領檯早 / 領檯晚)."""
+    return WORKSTATION_ROLE_MAP.get(shift_code, "烤手")
+
+
+# ─── Employee Skill Matching ──────────────────────────────────────────────────
+
+def employee_can_do_shift(habit: Habit, shift_code: str, role: str) -> bool:
+    """
+    Check if an employee can be assigned to a given shift code.
+    Uses skill-based matching: 烤手 / 領檯早 / 領檯晚.
+    """
+    role_needed = shift_code_to_role(shift_code)
+    skills = set(habit.workstation_skills)
+
+    if not skills:
+        # No skill data → only 烤手
+        return role_needed == "烤手"
+
+    return role_needed in skills
+
+
+# ─── Solver ───────────────────────────────────────────────────────────────────
+
+class DemandScheduleSolver:
+    """
+    CP-SAT solver that assigns employees to shift codes based on
+    a demand profile read from habits_demand_shift.json.
+
+    Variables:
+      x[e][d][sc] = 1 if employee e works shift code sc on day d
+
+    Hard constraints:
+      - At most 1 shift per employee per day
+      - At most 6 days per week
+      - Min 11h rest (no late shift followed by early next day)
+      - Max weekly hours cap
+      - Skill match (only assign shift codes the employee can do)
+      - Demand: each shift code on each day must meet required headcount
+
+    Soft objectives:
+      - Prefer preferred shift times
+      - Penalize overtime for no_overtime employees
+      - Fairness in weekly hours
+    """
+
+    def __init__(self, habits: list, demand_profile: dict,
+                 week_start_date: str, package_dates: set = None,
+                 enforce_preferences: bool = True,
+                 rest_days: dict = None, manager_config: dict = None,
+                 min_daily_headcount: dict = None,
+                 prev_tail: dict = None):
+        self.habits = habits
+        self.demand_profile = demand_profile
+        self.package_dates = package_dates or set()
+        self.enforce_preferences = enforce_preferences
+        self.rest_days = rest_days or {}
+        self.manager_config = manager_config or {}
+        self.min_daily_headcount = min_daily_headcount  # {"weekday": 18, "weekend": 22}
+        self.prev_tail = prev_tail or {}
+
+        self.week_start = datetime.strptime(week_start_date, "%Y-%m-%d")
+        self.num_days = 7
+        self.num_employees = len(habits)
+
+        # Build the full list of shift codes used across all scenarios
+        all_codes = set()
+        for scenario_profile in demand_profile.values():
+            for role, code_counts in scenario_profile.items():
+                for code in code_counts:
+                    all_codes.add(code)
+        self.shift_codes = sorted(all_codes)
+        self.num_shifts = len(self.shift_codes)
+        self.sc_idx = {sc: i for i, sc in enumerate(self.shift_codes)}
+
+        # Per-day scenario and requirements
+        self.day_scenarios = []
+        self.day_requirements = []  # list of {shift_code, role, required}
+        for d in range(self.num_days):
+            date_str = self._date_for_day(d)
+            scen = get_scenario(date_str, self.package_dates)
+            self.day_scenarios.append(scen)
+            self.day_requirements.append(get_day_requirements(scen, demand_profile))
+
+        self.model = cp_model.CpModel()
+        self.vars = {}  # vars[e][d][sc_idx]
+
+    def _date_for_day(self, day_idx: int) -> str:
+        d = self.week_start + timedelta(days=day_idx)
+        return d.strftime("%Y-%m-%d")
+
+    def _shift_start_hour(self, shift_code: str) -> int:
+        defn = SHIFT_DEFS.get(shift_code)
+        if defn:
+            return int(defn["start"].split(":")[0])
+        return 12  # default midday
+
+    def _shift_hours(self, shift_code: str) -> float:
+        defn = SHIFT_DEFS.get(shift_code)
+        return defn["hours"] if defn else 8.0
+
+    def _is_late_shift(self, shift_code: str) -> bool:
+        return self._shift_start_hour(shift_code) >= 17
+
+    def _is_early_shift(self, shift_code: str) -> bool:
+        return self._shift_start_hour(shift_code) <= 11
+
+    def _shift_time_bucket(self, shift_code: str) -> str:
+        """Classify a shift code into morning / afternoon / evening."""
+        start_h = self._shift_start_hour(shift_code)
+        if start_h < 12:
+            return "morning"
+        elif start_h < 17:
+            return "afternoon"
+        else:
+            return "evening"
+
+    @staticmethod
+    def _prefs_are_shift_codes(preferred_shifts: list) -> bool:
+        """Return True if preferred_shifts contains shift codes (B106, C102…),
+        False if they are time-bucket labels (morning, afternoon, evening)."""
+        if not preferred_shifts:
+            return False
+        time_labels = {"morning", "afternoon", "evening"}
+        # If any entry looks like a shift code (starts with B/C or contains 櫃台),
+        # treat the whole list as shift codes.
+        for p in preferred_shifts:
+            if p in time_labels:
+                return False
+            if re.match(r'^[BC]\d', p) or '櫃台' in p:
+                return True
+        # Default: treat unknown strings as shift codes
+        return True
+
+    def build_variables(self):
+        for e in range(self.num_employees):
+            self.vars[e] = {}
+            for d in range(self.num_days):
+                self.vars[e][d] = {}
+                for i, sc in enumerate(self.shift_codes):
+                    self.vars[e][d][i] = self.model.NewBoolVar(
+                        f"e{e}_d{d}_sc{i}"
+                    )
+
+    def add_hard_constraints(self, relax_level: int = 0):
+        # HC1: At most 1 shift per employee per day
+        for e in range(self.num_employees):
+            for d in range(self.num_days):
+                self.model.AddAtMostOne(
+                    self.vars[e][d][i] for i in range(self.num_shifts)
+                )
+
+        # HC2: At most 5 days per week (一例一休: guarantee 2 rest days)
+        for e in range(self.num_employees):
+            self.model.Add(
+                sum(
+                    self.vars[e][d][i]
+                    for d in range(self.num_days)
+                    for i in range(self.num_shifts)
+                ) <= 5
+            )
+
+        # HC3: Rest between late and early shifts (next day)
+        late_indices = [i for i, sc in enumerate(self.shift_codes)
+                        if self._is_late_shift(sc)]
+        early_indices = [i for i, sc in enumerate(self.shift_codes)
+                         if self._is_early_shift(sc)]
+        if late_indices and early_indices:
+            for e in range(self.num_employees):
+                for d in range(self.num_days - 1):
+                    late_sum = sum(self.vars[e][d][i] for i in late_indices)
+                    early_sum = sum(self.vars[e][d+1][i] for i in early_indices)
+                    self.model.Add(late_sum + early_sum <= 1)
+
+        # HC3-cross: If prev week last day was a late shift, forbid early shift on day 0
+        if self.prev_tail and late_indices and early_indices:
+            for e, habit in enumerate(self.habits):
+                tail = self.prev_tail.get(habit.employee_id)
+                if tail and tail.get("last_shift") and self._is_late_shift(tail["last_shift"]):
+                    for i in early_indices:
+                        self.model.Add(self.vars[e][0][i] == 0)
+
+        # HC4: Weekly hours cap
+        for e in range(self.num_employees):
+            # Use integer arithmetic (hours × 10 to avoid float)
+            weekly_hours_x10 = sum(
+                self.vars[e][d][i] * int(self._shift_hours(sc) * 10)
+                for d in range(self.num_days)
+                for i, sc in enumerate(self.shift_codes)
+            )
+            self.model.Add(weekly_hours_x10 <= int(MAX_WEEKLY_HOURS * 10))
+
+        # HC5: Skill match
+        for e, habit in enumerate(self.habits):
+            for i, sc in enumerate(self.shift_codes):
+                role = WORKSTATION_ROLE_MAP.get(sc, "烤手")
+                if not employee_can_do_shift(habit, sc, role):
+                    for d in range(self.num_days):
+                        self.model.Add(self.vars[e][d][i] == 0)
+
+        # HC6: Designated rest days (never relaxed — labor law)
+        for e, habit in enumerate(self.habits):
+            rest_day_indices = self.rest_days.get(habit.employee_id, set())
+            for d in rest_day_indices:
+                if 0 <= d < self.num_days:
+                    for i in range(self.num_shifts):
+                        self.model.Add(self.vars[e][d][i] == 0)
+
+        # HC7: Manager coverage constraints (at least N managers in early/late shifts)
+        if self.manager_config and self.manager_config.get("member_ids"):
+            mgr_ids = set(self.manager_config["member_ids"])
+            daily_early = self.manager_config.get("daily_early_count", 1)
+            daily_late = self.manager_config.get("daily_late_count", 1)
+
+            # Find manager employee indices
+            mgr_indices = [e for e, h in enumerate(self.habits)
+                           if h.employee_id in mgr_ids]
+
+            # Early/late shifts from config, fallback to hour-based threshold
+            early_codes = set(self.manager_config.get("early_shifts", []))
+            late_codes = set(self.manager_config.get("late_shifts", []))
+
+            if early_codes:
+                early_shift_indices = [i for i, sc in enumerate(self.shift_codes) if sc in early_codes]
+            else:
+                early_shift_indices = [i for i, sc in enumerate(self.shift_codes)
+                                       if sc.startswith("B") and self._shift_start_hour(sc) <= 12]
+
+            if late_codes:
+                late_shift_indices = [i for i, sc in enumerate(self.shift_codes) if sc in late_codes]
+            else:
+                late_shift_indices = [i for i, sc in enumerate(self.shift_codes)
+                                      if sc.startswith("B") and self._shift_start_hour(sc) >= 14]
+
+            if mgr_indices:
+                for d in range(self.num_days):
+                    if relax_level < 2:
+                        # At least daily_early managers on any early B-code shift
+                        if early_shift_indices:
+                            self.model.Add(
+                                sum(self.vars[e][d][i]
+                                    for e in mgr_indices
+                                    for i in early_shift_indices)
+                                >= daily_early
+                            )
+                        # At least daily_late managers on any late B-code shift
+                        if late_shift_indices:
+                            self.model.Add(
+                                sum(self.vars[e][d][i]
+                                    for e in mgr_indices
+                                    for i in late_shift_indices)
+                                >= daily_late
+                            )
+
+        # HC9: Forbidden same-day rest pairs
+        no_same_rest = self.manager_config.get("no_same_rest", [])
+        for pair in no_same_rest:
+            idx_a = next((e for e, h in enumerate(self.habits) if h.employee_id == pair[0]), None)
+            idx_b = next((e for e, h in enumerate(self.habits) if h.employee_id == pair[1]), None)
+            if idx_a is not None and idx_b is not None:
+                for d in range(self.num_days):
+                    working_a = sum(self.vars[idx_a][d][i] for i in range(self.num_shifts))
+                    working_b = sum(self.vars[idx_b][d][i] for i in range(self.num_shifts))
+                    # At least one must work: working_a + working_b >= 1
+                    self.model.Add(working_a + working_b >= 1)
+
+        # HC8: Minimum daily headcount
+        self._add_headcount_constraints(relax_level)
+
+    def _add_headcount_constraints(self, relax_level: int = 0):
+        """Add minimum daily total headcount constraints (HC8).
+        Supports differentiated headcounts: weekday, saturday, sunday, package."""
+        if not self.min_daily_headcount:
+            return
+
+        W_HEADCOUNT = 200  # penalty weight for soft mode
+        weekday_min = self.min_daily_headcount.get("weekday", 0)
+        saturday_min = self.min_daily_headcount.get("saturday",
+                           self.min_daily_headcount.get("weekend", 0))
+        sunday_min = self.min_daily_headcount.get("sunday",
+                         self.min_daily_headcount.get("weekend", 0))
+        package_min = self.min_daily_headcount.get("package", 0)
+
+        for d in range(self.num_days):
+            date_str = self._date_for_day(d)
+            dt = self.week_start + timedelta(days=d)
+            is_pkg = date_str in self.package_dates
+
+            if dt.weekday() == 5:  # Saturday
+                required = saturday_min
+            elif dt.weekday() == 6 or date_str in TW_HOLIDAYS_2026:  # Sunday / holiday
+                required = sunday_min
+            elif is_pkg:
+                required = max(weekday_min, package_min)
+            else:
+                required = weekday_min
+            if required <= 0:
+                continue
+
+            total_staff = sum(
+                self.vars[e][d][i]
+                for e in range(self.num_employees)
+                for i in range(self.num_shifts)
+            )
+
+            if relax_level == 0:
+                # Hard constraint
+                self.model.Add(total_staff >= required)
+            else:
+                # Soft penalty: store deficit var for objective
+                deficit = self.model.NewIntVar(0, self.num_employees,
+                                               f"hc_deficit_d{d}")
+                self.model.Add(deficit >= required - total_staff)
+                if not hasattr(self, '_headcount_penalties'):
+                    self._headcount_penalties = []
+                self._headcount_penalties.append((deficit, W_HEADCOUNT))
+
+    def add_demand_constraints(self, relax: bool = False):
+        """
+        For each day, for each required shift code, ensure total assigned >= required.
+        If relax=True, only enforce >= 1 (minimum viable).
+        """
+        for d in range(self.num_days):
+            reqs = self.day_requirements[d]
+            # Combine requirements by shift_code (sum across roles for same code)
+            code_required = defaultdict(int)
+            for req in reqs:
+                code_required[req["shift_code"]] += req["required"]
+
+            for sc, required in code_required.items():
+                if sc not in self.sc_idx:
+                    continue
+                i = self.sc_idx[sc]
+                staff_sum = sum(self.vars[e][d][i] for e in range(self.num_employees))
+                min_required = 1 if relax else required
+                self.model.Add(staff_sum >= min_required)
+
+    def build_objective(self, relax_level: int = 0) -> list:
+        penalties = []
+
+        # ── Weight constants (aligned with product-spec §10.3) ──
+        W_VAC = 100            # SC1: demand coverage
+        W_FAIRNESS = 15        # SC3: fairness
+        W_PREF = 10            # SC2: shift preference
+        W_EMPLOYEE_SOFT = 8    # SC4: no-overtime employee soft constraint
+        W_SHIFT = 5            # SC5: shift frequency preference
+
+        # ── SC1: Demand coverage (penalize both shortage and overstaffing) ──
+        for d in range(self.num_days):
+            reqs = self.day_requirements[d]
+            code_required = defaultdict(int)
+            for req in reqs:
+                code_required[req["shift_code"]] += req["required"]
+
+            for sc, required in code_required.items():
+                if sc not in self.sc_idx:
+                    continue
+                i = self.sc_idx[sc]
+                target = max(1, required) if relax_level >= 2 else required
+                staff_sum = sum(self.vars[e][d][i] for e in range(self.num_employees))
+                shortage = self.model.NewIntVar(0, self.num_employees,
+                                               f"shortage_{sc}_d{d}")
+                self.model.Add(shortage >= target - staff_sum)
+                penalties.append((shortage, W_VAC))
+                # Penalize overstaffing (less weight than shortage)
+                surplus = self.model.NewIntVar(0, self.num_employees,
+                                              f"surplus_{sc}_d{d}")
+                self.model.Add(surplus >= staff_sum - target)
+                penalties.append((surplus, W_FAIRNESS))
+
+            # Penalize assigning shifts that have zero demand on this day
+            for i, sc in enumerate(self.shift_codes):
+                if sc not in code_required:
+                    for e in range(self.num_employees):
+                        penalties.append((self.vars[e][d][i], W_VAC))
+
+        # ── SC2: Shift preference (fixed: supports shift codes & time labels) ──
+        if relax_level < 1 and self.enforce_preferences:
+            for e, habit in enumerate(self.habits):
+                if not habit.preferred_shifts:
+                    continue
+                is_code = self._prefs_are_shift_codes(habit.preferred_shifts)
+
+                for i, sc in enumerate(self.shift_codes):
+                    if is_code:
+                        # Direct shift-code matching
+                        if sc in habit.preferred_shifts:
+                            pref_rank = habit.preferred_shifts.index(sc)
+                        else:
+                            pref_rank = len(habit.preferred_shifts) + 1
+                    else:
+                        # Time-bucket matching (original logic)
+                        bucket = self._shift_time_bucket(sc)
+                        if bucket in habit.preferred_shifts:
+                            pref_rank = habit.preferred_shifts.index(bucket)
+                        else:
+                            pref_rank = len(habit.preferred_shifts) + 1
+
+                    if pref_rank > 0:
+                        for d in range(self.num_days):
+                            penalties.append((self.vars[e][d][i],
+                                              pref_rank * W_PREF))
+
+        # ── SC3: Fairness — personalised target from avg_shifts_per_week ──
+        for e, habit in enumerate(self.habits):
+            avg = habit.avg_shifts_per_week
+            if avg and avg > 0:
+                # Values > 7 are likely biweekly totals → halve them
+                target_raw = avg / 2.0 if avg > 7 else avg
+                target_days = max(1, min(6, round(target_raw)))
+            else:
+                target_days = 5  # default for employees with no data
+
+            total = sum(
+                self.vars[e][d][i]
+                for d in range(self.num_days)
+                for i in range(self.num_shifts)
+            )
+            # Penalise both over-scheduling and under-scheduling
+            overwork = self.model.NewIntVar(0, self.num_days, f"overwork_{e}")
+            self.model.Add(overwork >= total - target_days)
+            penalties.append((overwork, W_FAIRNESS))
+
+            underwork = self.model.NewIntVar(0, self.num_days, f"underwork_{e}")
+            self.model.Add(underwork >= target_days - total)
+            penalties.append((underwork, W_FAIRNESS))
+
+        # ── SC4: Avoid late shifts for no-overtime employees ──
+        if relax_level < 1:
+            late_indices = [i for i, sc in enumerate(self.shift_codes)
+                            if self._is_late_shift(sc)]
+            for e, habit in enumerate(self.habits):
+                if habit.overtime_willingness == "no_overtime":
+                    for d in range(self.num_days):
+                        for i in late_indices:
+                            penalties.append((self.vars[e][d][i],
+                                              W_EMPLOYEE_SOFT))
+
+        # ── SC5: Shift frequency preference (new) ──
+        if relax_level < 1 and self.enforce_preferences:
+            for e, habit in enumerate(self.habits):
+                freq = habit.shift_frequency
+                if not freq:
+                    continue
+                max_freq = max(freq.values()) if freq else 0
+                if max_freq <= 0:
+                    continue
+
+                # Detect whether keys are shift codes or time buckets
+                freq_is_code = self._prefs_are_shift_codes(list(freq.keys()))
+
+                for i, sc in enumerate(self.shift_codes):
+                    if freq_is_code:
+                        f_val = freq.get(sc, 0)
+                    else:
+                        bucket = self._shift_time_bucket(sc)
+                        f_val = freq.get(bucket, 0)
+
+                    # Penalty inversely proportional to historical frequency
+                    penalty = int(W_SHIFT * 10 * (max_freq - f_val) / max_freq)
+                    if penalty > 0:
+                        for d in range(self.num_days):
+                            penalties.append((self.vars[e][d][i], penalty))
+
+        # ── SC6: 避免連上五天 (penalize 5 consecutive working days) ──
+        W_CONSEC5 = 30
+        for e in range(self.num_employees):
+            for start_d in range(self.num_days - 4):
+                window_working = []
+                for d in range(start_d, start_d + 5):
+                    w = self.model.NewBoolVar(f"working_{e}_{d}_sc6_{start_d}")
+                    self.model.Add(sum(self.vars[e][d][i] for i in range(self.num_shifts)) >= 1).OnlyEnforceIf(w)
+                    self.model.Add(sum(self.vars[e][d][i] for i in range(self.num_shifts)) == 0).OnlyEnforceIf(w.Not())
+                    window_working.append(w)
+                # all_five = 1 only when all 5 days are working
+                all_five = self.model.NewBoolVar(f"consec5_{e}_{start_d}")
+                self.model.AddBoolAnd(window_working).OnlyEnforceIf(all_five)
+                self.model.AddBoolOr([w.Not() for w in window_working]).OnlyEnforceIf(all_five.Not())
+                penalties.append((all_five, W_CONSEC5))
+
+        # ── SC6-cross: Cross-week consecutive 5 days (prev week tail + current week start) ──
+        if self.prev_tail:
+            for e, habit in enumerate(self.habits):
+                tail = self.prev_tail.get(habit.employee_id)
+                if not tail:
+                    continue
+                prev_working = tail["working"]  # [day-4, day-3, day-2, day-1]
+                # 4 cross-week windows: offset 0..3
+                # offset=0: prev[-4,-3,-2,-1] + curr[0] → need all 5
+                # offset=1: prev[-3,-2,-1] + curr[0,1] → need all 5
+                # offset=2: prev[-2,-1] + curr[0,1,2] → need all 5
+                # offset=3: prev[-1] + curr[0,1,2,3] → need all 5
+                for offset in range(4):
+                    prev_start = offset  # index into prev_working (0-based)
+                    prev_days_needed = 4 - offset  # how many prev days in the window
+                    curr_days_needed = offset + 1  # how many curr days in the window
+
+                    if curr_days_needed > self.num_days:
+                        continue
+
+                    # Check if all prev days in the window are working
+                    all_prev_working = all(prev_working[prev_start + k]
+                                           for k in range(prev_days_needed))
+                    if not all_prev_working:
+                        continue  # At least one prev day is rest, skip
+
+                    # Build constraint for the curr days part
+                    curr_working_vars = []
+                    for cd in range(curr_days_needed):
+                        w = self.model.NewBoolVar(f"working_cross_{e}_{offset}_{cd}")
+                        self.model.Add(
+                            sum(self.vars[e][cd][i] for i in range(self.num_shifts)) >= 1
+                        ).OnlyEnforceIf(w)
+                        self.model.Add(
+                            sum(self.vars[e][cd][i] for i in range(self.num_shifts)) == 0
+                        ).OnlyEnforceIf(w.Not())
+                        curr_working_vars.append(w)
+
+                    all_curr = self.model.NewBoolVar(f"consec5_cross_{e}_{offset}")
+                    self.model.AddBoolAnd(curr_working_vars).OnlyEnforceIf(all_curr)
+                    self.model.AddBoolOr(
+                        [w.Not() for w in curr_working_vars]
+                    ).OnlyEnforceIf(all_curr.Not())
+                    penalties.append((all_curr, W_CONSEC5))
+
+        # ── SC7: 避免做一休一 (penalize work-rest-work isolated pattern) ──
+        W_ALTERNATE = 15
+        for e in range(self.num_employees):
+            for d in range(1, self.num_days - 1):
+                # Detect: day d-1 working, day d rest, day d+1 working
+                w_prev = self.model.NewBoolVar(f"wp_{e}_{d}")
+                r_curr = self.model.NewBoolVar(f"rc_{e}_{d}")
+                w_next = self.model.NewBoolVar(f"wn_{e}_{d}")
+
+                self.model.Add(sum(self.vars[e][d-1][i] for i in range(self.num_shifts)) >= 1).OnlyEnforceIf(w_prev)
+                self.model.Add(sum(self.vars[e][d-1][i] for i in range(self.num_shifts)) == 0).OnlyEnforceIf(w_prev.Not())
+                self.model.Add(sum(self.vars[e][d][i] for i in range(self.num_shifts)) == 0).OnlyEnforceIf(r_curr)
+                self.model.Add(sum(self.vars[e][d][i] for i in range(self.num_shifts)) >= 1).OnlyEnforceIf(r_curr.Not())
+                self.model.Add(sum(self.vars[e][d+1][i] for i in range(self.num_shifts)) >= 1).OnlyEnforceIf(w_next)
+                self.model.Add(sum(self.vars[e][d+1][i] for i in range(self.num_shifts)) == 0).OnlyEnforceIf(w_next.Not())
+
+                alt_pattern = self.model.NewBoolVar(f"alt_{e}_{d}")
+                self.model.AddBoolAnd([w_prev, r_curr, w_next]).OnlyEnforceIf(alt_pattern)
+                self.model.AddBoolOr([w_prev.Not(), r_curr.Not(), w_next.Not()]).OnlyEnforceIf(alt_pattern.Not())
+                penalties.append((alt_pattern, W_ALTERNATE))
+
+        # ── SC7-cross: Cross-week work-rest-work pattern ──
+        # Higher weight than intra-week SC7 because cross-week patterns are
+        # harder for humans to spot and the solver has more freedom to avoid them
+        W_ALT_CROSS = 50
+        if self.prev_tail:
+            for e, habit in enumerate(self.habits):
+                tail = self.prev_tail.get(habit.employee_id)
+                if not tail:
+                    continue
+                prev_working = tail["working"]  # [day-4, day-3, day-2, day-1]
+
+                # Triplet 1: prev[-2] working, prev[-1] rest → curr day0 working = penalty
+                if len(prev_working) >= 2 and prev_working[-2] and not prev_working[-1]:
+                    # day0 working is the only variable
+                    w_day0 = self.model.NewBoolVar(f"sc7_cross1_w0_{e}")
+                    self.model.Add(
+                        sum(self.vars[e][0][i] for i in range(self.num_shifts)) >= 1
+                    ).OnlyEnforceIf(w_day0)
+                    self.model.Add(
+                        sum(self.vars[e][0][i] for i in range(self.num_shifts)) == 0
+                    ).OnlyEnforceIf(w_day0.Not())
+                    penalties.append((w_day0, W_ALT_CROSS))
+
+                # Triplet 2: prev[-1] working → curr day0 rest, curr day1 working = penalty
+                if prev_working[-1] and self.num_days >= 2:
+                    r_day0 = self.model.NewBoolVar(f"sc7_cross2_r0_{e}")
+                    w_day1 = self.model.NewBoolVar(f"sc7_cross2_w1_{e}")
+
+                    self.model.Add(
+                        sum(self.vars[e][0][i] for i in range(self.num_shifts)) == 0
+                    ).OnlyEnforceIf(r_day0)
+                    self.model.Add(
+                        sum(self.vars[e][0][i] for i in range(self.num_shifts)) >= 1
+                    ).OnlyEnforceIf(r_day0.Not())
+
+                    self.model.Add(
+                        sum(self.vars[e][1][i] for i in range(self.num_shifts)) >= 1
+                    ).OnlyEnforceIf(w_day1)
+                    self.model.Add(
+                        sum(self.vars[e][1][i] for i in range(self.num_shifts)) == 0
+                    ).OnlyEnforceIf(w_day1.Not())
+
+                    alt_cross = self.model.NewBoolVar(f"alt_cross2_{e}")
+                    self.model.AddBoolAnd([r_day0, w_day1]).OnlyEnforceIf(alt_cross)
+                    self.model.AddBoolOr([r_day0.Not(), w_day1.Not()]).OnlyEnforceIf(alt_cross.Not())
+                    penalties.append((alt_cross, W_ALT_CROSS))
+
+        return penalties
+
+    def solve(self, time_limit_seconds: int = 60) -> tuple:
+        """
+        Solve with automatic retry at 3 relaxation levels.
+        Returns (status, entries, stats, relax_level).
+        """
+        best_result = None
+
+        for relax_level in range(3):
+            if relax_level > 0:
+                print(f"⚠️  求解失敗，嘗試放寬限制 (等級 {relax_level})...")
+                self.model = cp_model.CpModel()
+                self.vars = {}
+                self._headcount_penalties = []
+
+            self._headcount_penalties = []
+            self.build_variables()
+            self.add_hard_constraints(relax_level=relax_level)
+            self.add_demand_constraints(relax=(relax_level >= 2))
+
+            penalties = self.build_objective(relax_level)
+            # Include headcount soft penalties (from HC8 at relax_level >= 1)
+            penalties.extend(self._headcount_penalties)
+            if penalties:
+                self.model.Minimize(sum(w * v for v, w in penalties))
+
+            solver = cp_model.CpSolver()
+            solver.parameters.max_time_in_seconds = time_limit_seconds
+            solver.parameters.log_search_progress = False
+
+            status = solver.Solve(self.model)
+
+            if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+                entries = self._extract_schedule(solver)
+                stats = self._compute_stats(solver)
+                best_result = (status, entries, stats, relax_level)
+                label = "最優解" if status == cp_model.OPTIMAL else "可行解"
+                print(f"✅ 求解成功 ({label}, 放寬等級={relax_level})")
+                break
+            else:
+                print(f"   ❌ 放寬等級 {relax_level} 仍無解")
+
+        if best_result is None:
+            print("❌ 無法找到可行解，請檢查班次設定或員工資料")
+            return (cp_model.INFEASIBLE, [], {}, -1)
+
+        return best_result
+
+    def _extract_schedule(self, solver) -> list:
+        entries = []
+        for e, habit in enumerate(self.habits):
+            for d in range(self.num_days):
+                for i, sc in enumerate(self.shift_codes):
+                    if solver.Value(self.vars[e][d][i]) == 1:
+                        defn = SHIFT_DEFS.get(sc, {})
+                        role = WORKSTATION_ROLE_MAP.get(sc, "烤手")
+                        entry = ScheduleEntry(
+                            date=self._date_for_day(d),
+                            day_of_week=DAYS_TW[d],
+                            employee_id=habit.employee_id,
+                            employee_name=f"{habit.chinese_name} ({habit.english_name})",
+                            shift_start=defn.get("start", ""),
+                            shift_end=defn.get("end", ""),
+                            workstation=sc,
+                            workstation_role=role,
+                        )
+                        entries.append(entry)
+        return entries
+
+    def _compute_stats(self, solver) -> dict:
+        emp_hours = {}
+        shift_code_daily = {sc: [0] * self.num_days for sc in self.shift_codes}
+
+        for e, habit in enumerate(self.habits):
+            total_hours = 0.0
+            for d in range(self.num_days):
+                for i, sc in enumerate(self.shift_codes):
+                    if solver.Value(self.vars[e][d][i]) == 1:
+                        total_hours += self._shift_hours(sc)
+                        shift_code_daily[sc][d] += 1
+            emp_hours[habit.employee_id] = total_hours
+
+        return {
+            "employee_weekly_hours": emp_hours,
+            "daily_coverage_by_shift": shift_code_daily,
+            "day_scenarios": self.day_scenarios,
+        }
+
+
+# ─── Output ───────────────────────────────────────────────────────────────────
+
+def save_schedule_csv(entries: list, output_path: str):
+    with open(output_path, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.DictWriter(f, fieldnames=[
+            "date", "day_of_week", "employee_id", "employee_name",
+            "shift_start", "shift_end", "workstation", "workstation_role",
+            "leave_type"
+        ])
+        writer.writeheader()
+        for e in entries:
+            writer.writerow({
+                "date": e.date,
+                "day_of_week": e.day_of_week,
+                "employee_id": e.employee_id,
+                "employee_name": e.employee_name,
+                "shift_start": e.shift_start,
+                "shift_end": e.shift_end,
+                "workstation": e.workstation or "",
+                "workstation_role": e.workstation_role or "",
+                "leave_type": e.leave_type or "",
+            })
+    print(f"✅ 班表已儲存至 {output_path} ({len(entries)} 筆)")
+
+
+def save_schedule_json(entries: list, stats: dict, output_path: str):
+    data = {
+        "schedule": [
+            {
+                "date": e.date,
+                "day_of_week": e.day_of_week,
+                "employee_id": e.employee_id,
+                "employee_name": e.employee_name,
+                "shift_start": e.shift_start,
+                "shift_end": e.shift_end,
+                "workstation": e.workstation,
+                "workstation_role": e.workstation_role,
+                "leave_type": e.leave_type,
+            }
+            for e in entries
+        ],
+        "stats": stats,
+    }
+    with open(output_path, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    print(f"✅ 詳細資料已儲存至 {output_path}")
+
+
+# ─── Main Pipeline ─────────────────────────────────────────────────────────────
+
+def run_scheduler(habits_path: str, demand_path: str,
+                  output_prefix: str = "schedule",
+                  week_start: str = None,
+                  tenant_dir: str = None,
+                  rest_days_path: str = None,
+                  prev_schedule_path: str = None):
+    print("=" * 60)
+    print("📅 排班求解器 (Demand-Aware Scheduler)")
+    print("=" * 60)
+
+    # Load habits
+    habits = load_habits_json(habits_path)
+    print(f"📂 載入 {len(habits)} 位員工習慣資料")
+
+    # Load staff_roles to override skills (critical for correct skill matching)
+    manager_config = {}
+    if tenant_dir:
+        merge_staff_roles(habits, tenant_dir)
+        staff_roles_path = os.path.join(tenant_dir, "staff_roles.json")
+        manager_config = load_manager_config(staff_roles_path)
+        if manager_config:
+            print(f"👔 主管設定: {manager_config.get('member_ids', [])}")
+
+    # Load demand profile
+    demand_profile = load_demand_profile(demand_path)
+    print(f"📋 載入需求分析: {list(demand_profile.keys())}")
+
+    # Load package dates
+    package_dates = load_package_dates(tenant_dir) if tenant_dir else set()
+    if package_dates:
+        print(f"📅 包場日期: {sorted(package_dates)}")
+
+    # Default week: next Monday
+    if not week_start:
+        today = datetime.today()
+        days_ahead = (7 - today.weekday()) % 7 or 7
+        week_start = (today + timedelta(days=days_ahead)).strftime("%Y-%m-%d")
+
+    # Load rest days
+    rd_path = rest_days_path or (os.path.join(tenant_dir, "rest_days.json")
+                                  if tenant_dir else None)
+    rest_days = load_rest_days(rd_path, week_start) if rd_path else {}
+    if rest_days:
+        print(f"🛌 指定劃休: {len(rest_days)} 位員工有指定休假日")
+
+    # Load previous week schedule for cross-week constraints
+    prev_tail = load_prev_tail(prev_schedule_path, habits) if prev_schedule_path else {}
+    if prev_tail:
+        print(f"📎 前週班表: 載入 {len(prev_tail)} 位員工跨週資料")
+
+    solver = DemandScheduleSolver(
+        habits=habits,
+        demand_profile=demand_profile,
+        week_start_date=week_start,
+        package_dates=package_dates,
+        rest_days=rest_days,
+        manager_config=manager_config,
+        min_daily_headcount={"weekday": 18, "saturday": 23, "sunday": 22, "package": 19},
+        prev_tail=prev_tail,
+    )
+
+    print(f"\n🔧 開始求解...")
+    print(f"   員工數:  {len(habits)}")
+    print(f"   班次代碼: {len(solver.shift_codes)} 種 ({', '.join(solver.shift_codes[:6])}…)")
+    print(f"   週起始:  {solver.week_start.strftime('%Y-%m-%d')} ({DAYS_TW[solver.week_start.weekday()]})")
+    print(f"\n   每日情境:")
+    for d in range(7):
+        date_str = solver._date_for_day(d)
+        print(f"   {DAYS_TW[d]} {date_str}: {solver.day_scenarios[d]}")
+
+    status, entries, stats, relax_level = solver.solve(time_limit_seconds=60)
+
+    if not entries:
+        print("❌ 求解失敗，無法產出班表")
+        return
+
+    # Summary
+    print(f"\n📊 班表摘要:")
+    print(f"   總排班數: {len(entries)}")
+
+    if stats.get("employee_weekly_hours"):
+        hours_list = list(stats["employee_weekly_hours"].values())
+        print(f"   平均週工時: {sum(hours_list)/len(hours_list):.1f}h")
+
+    if stats.get("daily_coverage_by_shift"):
+        print(f"\n   每日班次人數 (前8個班次代碼):")
+        for sc in solver.shift_codes[:8]:
+            daily = stats["daily_coverage_by_shift"][sc]
+            counts = " ".join(f"{c:2}" for c in daily)
+            print(f"   {sc:<8} [{counts}]  (週總 {sum(daily)})")
+
+    save_schedule_csv(entries, f"{output_prefix}.csv")
+    save_schedule_json(entries, stats, f"{output_prefix}.json")
+
+    print(f"\n{'=' * 60}")
+    print(f"✅ 排班完成！(放寬等級={relax_level})")
+    print(f"{'=' * 60}")
+
+
+# ─── CLI ──────────────────────────────────────────────────────────────────────
+
+if __name__ == "__main__":
+    if len(sys.argv) < 3:
+        print("用法: python ortools_solver.py <habits.json> <demand_shift.json> [輸出前綴] [週起始] [tenant目錄] [前週班表]")
+        print("範例:")
+        print("  python ortools_solver.py habits.json habits_demand_shift.json schedule 2026-03-02 tenants/glod-pig")
+        print("  python ortools_solver.py habits.json habits_demand_shift.json schedule_0309 2026-03-09 tenants/glod-pig schedule_0302.csv")
+        sys.exit(1)
+
+    habits_path        = sys.argv[1]
+    demand_path        = sys.argv[2]
+    output_prefix      = sys.argv[3] if len(sys.argv) > 3 else "schedule"
+    week_start         = sys.argv[4] if len(sys.argv) > 4 else None
+    tenant_dir         = sys.argv[5] if len(sys.argv) > 5 else None
+    prev_schedule_path = sys.argv[6] if len(sys.argv) > 6 else None
+
+    run_scheduler(habits_path, demand_path, output_prefix, week_start, tenant_dir,
+                  prev_schedule_path=prev_schedule_path)

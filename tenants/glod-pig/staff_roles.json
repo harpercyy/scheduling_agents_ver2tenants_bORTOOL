@@ -1,0 +1,20 @@
+{
+  "_manager_group": {
+    "member_ids": ["1", "3", "4", "5"],
+    "daily_early_count": 1,
+    "daily_late_count": 1,
+    "early_shifts": ["B003", "B106", "B008"],
+    "late_shifts": ["B009", "B010"]
+  },
+  "_no_same_rest": [
+    ["4", "6"]
+  ],
+  "1":  { "_name": "林靜宜 (Sherry)",  "skills": ["烤手"] },
+  "2":  { "_name": "李基雨 (Kiwoo)",   "skills": ["烤手"] },
+  "3":  { "_name": "史曜誠 (Money)",   "skills": ["烤手"] },
+  "4":  { "_name": "黃妤婕 (Ada)",     "skills": ["烤手"] },
+  "8":  { "_name": "吳咨錞 (Tess)",    "skills": ["領檯早", "烤手"] },
+  "9":  { "_name": "洪菀妤 (Leona)",   "skills": ["領檯早", "烤手"] },
+  "25": { "_name": "趙翊蓁 (Jaclyn)",  "skills": ["領檯晚", "烤手"] },
+  "26": { "_name": "譚憶樺 (Rita)",    "skills": ["領檯晚", "烤手"] }
+}
