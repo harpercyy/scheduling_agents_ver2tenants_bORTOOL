@@ -106,6 +106,8 @@ class TenantConfig:
         "max_working_days": 5, "std_weekly_hours": 40,
     })
     csv_parser: str = "generic"
+    csv_code_aliases: dict = field(default_factory=dict)  # {csv_code: [shift_defs_code, ...]}
+    min_role_per_day: dict = field(default_factory=dict)  # {role: min_count} per day
     region_holidays: set = field(default_factory=set)  # populated by load_tenant_config
 
 
@@ -120,7 +122,8 @@ def load_tenant_config(tenant_dir: str) -> TenantConfig:
 
     # Strip doc comments (keys starting with _doc)
     data = {k: v for k, v in data.items() if not k.startswith("_doc")}
-    for key in ["shift_defs", "workstation_roles", "min_daily_headcount", "constraints"]:
+    for key in ["shift_defs", "workstation_roles", "min_daily_headcount", "constraints",
+                 "min_role_per_day", "csv_code_aliases"]:
         if isinstance(data.get(key), dict):
             data[key] = {k: v for k, v in data[key].items() if not k.startswith("_doc")}
 
@@ -140,6 +143,12 @@ def load_tenant_config(tenant_dir: str) -> TenantConfig:
     # Load region holidays
     holidays = get_region_holidays(data["region"])
 
+    # Load min_role_per_day (optional, for per-role daily minimums)
+    min_role_per_day = data.get("min_role_per_day") or {}
+
+    # Load csv_code_aliases (optional, for CSV → shift_defs expansion)
+    csv_code_aliases = data.get("csv_code_aliases") or {}
+
     config = TenantConfig(
         tenant_id=data["tenant_id"],
         display_name=data["display_name"],
@@ -151,6 +160,8 @@ def load_tenant_config(tenant_dir: str) -> TenantConfig:
         min_daily_headcount=headcount,
         constraints=constraints,
         csv_parser=data.get("csv_parser", "generic"),
+        csv_code_aliases=csv_code_aliases,
+        min_role_per_day=min_role_per_day,
         region_holidays=holidays,
     )
 
@@ -214,6 +225,7 @@ class Habit:
     overtime_willingness: Optional[str] = None              # "fixed_ot" / "no_ot" / "flexible"
     rotation_flexibility: Optional[str] = None              # "full" / "morning_afternoon" / "none"
     workstation_skills: list = field(default_factory=list)  # ["B104", "B003", "櫃台"]
+    employee_type: str = "ft"                               # "ft" (正職) or "pt" (兼職)
     avg_weekly_hours: float = 0.0
     avg_shifts_per_week: float = 0.0
 
@@ -704,13 +716,22 @@ def merge_staff_roles(habits: list, tenant_dir: str):
         staff_roles = json.load(f)
 
     overridden = 0
+    pt_count = 0
     for habit in habits:
         entry = staff_roles.get(habit.employee_id)
-        if entry and isinstance(entry.get("skills"), list):
-            habit.workstation_skills = entry["skills"]
-            overridden += 1
+        if entry:
+            if isinstance(entry.get("skills"), list):
+                habit.workstation_skills = entry["skills"]
+                overridden += 1
+            # Read employee type: "ft" (正職, default) or "pt" (兼職)
+            emp_type = entry.get("type", "ft")
+            if emp_type in ("ft", "pt"):
+                habit.employee_type = emp_type
+                if emp_type == "pt":
+                    pt_count += 1
 
-    print(f"   📋 staff_roles.json: 覆蓋 {overridden} 位員工技能")
+    print(f"   📋 staff_roles.json: 覆蓋 {overridden} 位員工技能"
+          + (f"，{pt_count} 位兼職 (PT)" if pt_count else ""))
 
 
 # ─── CLI ──────────────────────────────────────────────────────────────────────

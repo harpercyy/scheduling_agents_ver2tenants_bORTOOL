@@ -525,12 +525,58 @@ class DemandScheduleSolver:
                     # At least one must work: working_a + working_b >= 1
                     self.model.Add(working_a + working_b >= 1)
 
+        # HC10: Minimum daily per-role coverage (e.g., 領檯早 >= 1, 領檯晚 >= 1)
+        self._add_role_coverage_constraints(relax_level)
+
         # HC8: Minimum daily headcount
         self._add_headcount_constraints(relax_level)
 
+    def _add_role_coverage_constraints(self, relax_level: int = 0):
+        """Add minimum daily per-role coverage constraints (HC10).
+        Reads min_role_per_day from tenant_config: {role: min_count}.
+        For each role, finds all shift codes mapped to that role and ensures
+        the daily sum of assignments meets the minimum."""
+        if not self.tenant_config or not self.tenant_config.min_role_per_day:
+            return
+
+        for role, min_count in self.tenant_config.min_role_per_day.items():
+            if min_count <= 0:
+                continue
+            # Find shift code indices that map to this role
+            role_shift_indices = []
+            for i, sc in enumerate(self.shift_codes):
+                sc_role = self.workstation_roles.get(sc)
+                if sc_role == role:
+                    role_shift_indices.append(i)
+
+            if not role_shift_indices:
+                print(f"   ⚠️ HC10: 角色 '{role}' 在 min_role_per_day 中指定，"
+                      f"但無對應的班次代碼")
+                continue
+
+            for d in range(self.num_days):
+                role_staff = sum(
+                    self.vars[e][d][i]
+                    for e in range(self.num_employees)
+                    for i in role_shift_indices
+                )
+                if relax_level == 0:
+                    self.model.Add(role_staff >= min_count)
+                else:
+                    # Soft: allow deficit but penalize
+                    deficit = self.model.NewIntVar(
+                        0, self.num_employees,
+                        f"role_deficit_{role}_d{d}")
+                    self.model.Add(deficit >= min_count - role_staff)
+                    if not hasattr(self, '_headcount_penalties'):
+                        self._headcount_penalties = []
+                    self._headcount_penalties.append((deficit, 200))
+
     def _add_headcount_constraints(self, relax_level: int = 0):
         """Add minimum daily total headcount constraints (HC8).
-        Supports differentiated headcounts: weekday, saturday, sunday, package."""
+        Supports differentiated headcounts: weekday, saturday, sunday, package.
+        If manager_config.exclude_from_headcount is true, managers are excluded
+        from the headcount (RULES.md §3: 值班主管不計算在每日人數編制內)."""
         if not self.min_daily_headcount:
             return
 
@@ -541,6 +587,16 @@ class DemandScheduleSolver:
         sunday_min = self.min_daily_headcount.get("sunday",
                          self.min_daily_headcount.get("weekend", 0))
         package_min = self.min_daily_headcount.get("package", 0)
+
+        # Determine which employees to exclude from headcount (Rule C)
+        exclude_from_hc = set()
+        if self.manager_config.get("exclude_from_headcount"):
+            mgr_ids = set(self.manager_config.get("member_ids", []))
+            exclude_from_hc = {e for e, h in enumerate(self.habits)
+                               if h.employee_id in mgr_ids}
+
+        countable_employees = [e for e in range(self.num_employees)
+                               if e not in exclude_from_hc]
 
         for d in range(self.num_days):
             date_str = self._date_for_day(d)
@@ -560,7 +616,7 @@ class DemandScheduleSolver:
 
             total_staff = sum(
                 self.vars[e][d][i]
-                for e in range(self.num_employees)
+                for e in countable_employees
                 for i in range(self.num_shifts)
             )
 
@@ -851,6 +907,18 @@ class DemandScheduleSolver:
                     self.model.AddBoolAnd([r_day0, w_day1]).OnlyEnforceIf(alt_cross)
                     self.model.AddBoolOr([r_day0.Not(), w_day1.Not()]).OnlyEnforceIf(alt_cross.Not())
                     penalties.append((alt_cross, W_ALT_CROSS))
+
+        # ── SC8: PT (兼職) prefer evening shifts ──
+        # Penalize PT employees being assigned to non-evening shifts (start < 17:00)
+        W_PT_EVENING = 20
+        if relax_level < 1:
+            non_evening_indices = [i for i, sc in enumerate(self.shift_codes)
+                                   if self._shift_start_hour(sc) < 17]
+            for e, habit in enumerate(self.habits):
+                if habit.employee_type == "pt":
+                    for d in range(self.num_days):
+                        for i in non_evening_indices:
+                            penalties.append((self.vars[e][d][i], W_PT_EVENING))
 
         return penalties
 

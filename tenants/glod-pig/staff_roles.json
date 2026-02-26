@@ -4,7 +4,8 @@
     "daily_early_count": 1,
     "daily_late_count": 1,
     "early_shifts": ["B003", "B106", "B008"],
-    "late_shifts": ["B009", "B010"]
+    "late_shifts": ["B009", "B010"],
+    "exclude_from_headcount": true
   },
   "_no_same_rest": [
     ["4", "6"]

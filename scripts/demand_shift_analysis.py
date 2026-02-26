@@ -99,6 +99,7 @@ def run(tenant_dir: str, output_path: str = "habits_demand_shift.json"):
     tenant_config = load_tenant_config(tenant_dir)
     workstation_roles = tenant_config.workstation_roles
     holidays = tenant_config.region_holidays
+    csv_aliases = tenant_config.csv_code_aliases
 
     package_dates = load_package_dates(tenant_dir)
     roster_files = sorted([
@@ -123,8 +124,18 @@ def run(tenant_dir: str, output_path: str = "habits_demand_shift.json"):
                 if s.leave_type or not s.start_time or not s.workstation:
                     continue
                 scen = date_scenarios.get(s.date, "平日")
-                role = workstation_roles.get(s.workstation, "烤手")
-                matrix[scen][role][s.workstation] += 1
+
+                # Handle csv_code_aliases: expand ambiguous codes
+                if s.workstation in csv_aliases:
+                    targets = csv_aliases[s.workstation]
+                    for target in targets:
+                        role = workstation_roles.get(target)
+                        if role:
+                            matrix[scen][role][target] += 1.0 / len(targets)
+                else:
+                    role = workstation_roles.get(s.workstation)
+                    if role:
+                        matrix[scen][role][s.workstation] += 1
 
     # 計算每個情境的天數
     scenario_days = defaultdict(int)

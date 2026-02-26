@@ -332,6 +332,8 @@ def check_p1_tenant_rules(entries: list, coverage_targets: dict = None,
                     ))
 
     # P1-002: Minimum daily total headcount (supports saturday/sunday/package)
+    # If manager_config.exclude_from_headcount is true, managers are excluded
+    # from the headcount (RULES.md §3: 值班主管不計算在每日人數編制內)
     if min_daily_headcount:
         weekday_min = min_daily_headcount.get("weekday", 0)
         saturday_min = min_daily_headcount.get("saturday",
@@ -339,9 +341,15 @@ def check_p1_tenant_rules(entries: list, coverage_targets: dict = None,
         sunday_min = min_daily_headcount.get("sunday",
                          min_daily_headcount.get("weekend", 0))
         package_min = min_daily_headcount.get("package", 0)
+
+        # Determine manager IDs to exclude from headcount (Rule C)
+        exclude_ids = set()
+        if manager_config and manager_config.get("exclude_from_headcount"):
+            exclude_ids = set(manager_config.get("member_ids", []))
+
         by_date = defaultdict(list)
         for e in entries:
-            if not e.get("leave_type"):
+            if not e.get("leave_type") and e.get("employee_id") not in exclude_ids:
                 by_date[e["date"]].append(e)
         for date, day_entries in sorted(by_date.items()):
             try:
@@ -366,7 +374,7 @@ def check_p1_tenant_rules(entries: list, coverage_targets: dict = None,
                 violations.append(Violation(
                     priority="P1",
                     rule_id="P1-002",
-                    description=(f"{date} ({day_type}) 總人力不足："
+                    description=(f"{date} ({day_type}) 總人力不足（不含主管）："
                                  f"需要 {required} 人，僅有 {actual} 人"),
                     date=date,
                     suggestion=f"增派 {required - actual} 名員工",
@@ -427,6 +435,32 @@ def check_p1_tenant_rules(entries: list, coverage_targets: dict = None,
                     date=date,
                     suggestion="指派主管排晚班 (start≥14:00) 的 B-code 班次",
                 ))
+
+    # P1-005: Minimum daily per-role coverage (e.g., 領檯早 >= 1)
+    min_role_per_day = tenant_config.min_role_per_day if tenant_config else {}
+    workstation_roles = tenant_config.workstation_roles if tenant_config else {}
+    if min_role_per_day:
+        by_date_role = defaultdict(lambda: defaultdict(int))
+        for e in entries:
+            if not e.get("leave_type"):
+                ws = e.get("workstation", "")
+                role = workstation_roles.get(ws)
+                if role:
+                    by_date_role[e["date"]][role] += 1
+
+        all_dates = sorted(set(e["date"] for e in entries))
+        for date in all_dates:
+            for role, min_count in min_role_per_day.items():
+                actual = by_date_role.get(date, {}).get(role, 0)
+                if actual < min_count:
+                    violations.append(Violation(
+                        priority="P1",
+                        rule_id="P1-005",
+                        description=(f"{date} 角色 {role} 人力不足："
+                                     f"需要 {min_count} 人，僅有 {actual} 人"),
+                        date=date,
+                        suggestion=f"增派 {min_count - actual} 名 {role} 員工",
+                    ))
 
     # P1-004: No-same-rest pair violation
     no_same_rest = manager_config.get("no_same_rest", [])
@@ -638,6 +672,27 @@ def check_p2_preferences(entries: list, habits_map: dict) -> list:
                     employee_id=eid,
                     suggestion="減少此員工班次或改由加班意願較高的員工補充",
                 ))
+
+        # P2-003: PT (兼職) employees assigned to non-evening shifts
+        if getattr(habit, 'employee_type', 'ft') == "pt":
+            for e in working:
+                ws = e.get("workstation", "")
+                shift_start = e.get("shift_start", "")
+                if shift_start:
+                    try:
+                        start_hour = int(shift_start.split(":")[0])
+                    except (ValueError, IndexError):
+                        start_hour = 12
+                    if start_hour < 17:
+                        violations.append(Violation(
+                            priority="P2",
+                            rule_id="P2-003",
+                            description=(f"兼職員工 {habit.chinese_name}({eid}) 在 {e['date']} "
+                                         f"被排入非晚班（班次: {ws}，開始: {shift_start}）"),
+                            employee_id=eid,
+                            date=e["date"],
+                            suggestion="兼職人力以晚班為主，建議調整至晚班班次",
+                        ))
 
     return violations
 
