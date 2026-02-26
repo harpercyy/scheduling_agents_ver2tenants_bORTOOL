@@ -72,6 +72,12 @@
     "package": 19
   },
 
+  "min_role_per_day": {
+    "_doc": "每日各角色最低人力配置",
+    "領檯早": 1,
+    "領檯晚": 1
+  },
+
   "constraints": {
     "min_rest_hours": 11,
     "max_weekly_hours": 46,
@@ -79,5 +85,10 @@
     "std_weekly_hours": 40
   },
 
-  "csv_parser": "gold_pig_v1"
+  "csv_parser": "gold_pig_v1",
+
+  "csv_code_aliases": {
+    "_doc": "CSV 原始代碼 → shift_defs 代碼的展開對應",
+    "櫃台": ["櫃台(早)", "櫃台(晚)"]
+  }
 }

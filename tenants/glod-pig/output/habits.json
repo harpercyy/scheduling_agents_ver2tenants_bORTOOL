@@ -12,6 +12,7 @@
     "workstation_skills": [
       "烤手"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 0.0,
     "avg_shifts_per_week": 0.0,
     "shift_frequency": {
@@ -36,6 +37,7 @@
     "workstation_skills": [
       "烤手"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 22.0,
     "avg_shifts_per_week": 5.5,
     "shift_frequency": {
@@ -60,6 +62,7 @@
     "workstation_skills": [
       "烤手"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 34.5,
     "avg_shifts_per_week": 8.0,
     "shift_frequency": {
@@ -85,6 +88,7 @@
     "workstation_skills": [
       "烤手"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 29.0,
     "avg_shifts_per_week": 7.0,
     "shift_frequency": {
@@ -109,6 +113,7 @@
     "workstation_skills": [
       "烤手"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 33.2,
     "avg_shifts_per_week": 7.5,
     "shift_frequency": {
@@ -132,6 +137,7 @@
     "workstation_skills": [
       "烤手"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 37.0,
     "avg_shifts_per_week": 8.0,
     "shift_frequency": {
@@ -154,6 +160,7 @@
     "workstation_skills": [
       "烤手"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 30.5,
     "avg_shifts_per_week": 7.0,
     "shift_frequency": {
@@ -178,6 +185,7 @@
       "領檯早",
       "烤手"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 39.2,
     "avg_shifts_per_week": 9.0,
     "shift_frequency": {
@@ -202,6 +210,7 @@
       "領檯早",
       "烤手"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 30.8,
     "avg_shifts_per_week": 7.0,
     "shift_frequency": {
@@ -226,6 +235,7 @@
     "workstation_skills": [
       "烤手"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 39.8,
     "avg_shifts_per_week": 9.0,
     "shift_frequency": {
@@ -253,6 +263,7 @@
     "workstation_skills": [
       "烤手"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 36.0,
     "avg_shifts_per_week": 8.0,
     "shift_frequency": {
@@ -280,6 +291,7 @@
     "workstation_skills": [
       "烤手"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 34.5,
     "avg_shifts_per_week": 7.5,
     "shift_frequency": {
@@ -307,6 +319,7 @@
     "workstation_skills": [
       "烤手"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 32.5,
     "avg_shifts_per_week": 7.5,
     "shift_frequency": {
@@ -335,6 +348,7 @@
     "workstation_skills": [
       "烤手"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 37.8,
     "avg_shifts_per_week": 9.0,
     "shift_frequency": {
@@ -363,6 +377,7 @@
     "workstation_skills": [
       "烤手"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 34.0,
     "avg_shifts_per_week": 8.5,
     "shift_frequency": {
@@ -390,6 +405,7 @@
     "workstation_skills": [
       "烤手"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 30.5,
     "avg_shifts_per_week": 7.5,
     "shift_frequency": {
@@ -415,6 +431,7 @@
     "workstation_skills": [
       "烤手"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 31.5,
     "avg_shifts_per_week": 8.0,
     "shift_frequency": {
@@ -440,6 +457,7 @@
     "workstation_skills": [
       "烤手"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 30.0,
     "avg_shifts_per_week": 7.5,
     "shift_frequency": {
@@ -467,6 +485,7 @@
     "workstation_skills": [
       "烤手"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 24.5,
     "avg_shifts_per_week": 6.0,
     "shift_frequency": {
@@ -494,6 +513,7 @@
     "workstation_skills": [
       "烤手"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 23.0,
     "avg_shifts_per_week": 5.5,
     "shift_frequency": {
@@ -521,6 +541,7 @@
     "workstation_skills": [
       "烤手"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 35.5,
     "avg_shifts_per_week": 9.0,
     "shift_frequency": {
@@ -550,6 +571,7 @@
     "workstation_skills": [
       "烤手"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 33.0,
     "avg_shifts_per_week": 7.5,
     "shift_frequency": {
@@ -577,6 +599,7 @@
     "workstation_skills": [
       "烤手"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 38.5,
     "avg_shifts_per_week": 8.5,
     "shift_frequency": {
@@ -601,6 +624,7 @@
     "workstation_skills": [
       "烤手"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 30.5,
     "avg_shifts_per_week": 7.0,
     "shift_frequency": {
@@ -626,6 +650,7 @@
       "領檯晚",
       "烤手"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 34.8,
     "avg_shifts_per_week": 7.5,
     "shift_frequency": {
@@ -652,6 +677,7 @@
       "領檯晚",
       "烤手"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 36.5,
     "avg_shifts_per_week": 8.5,
     "shift_frequency": {
@@ -678,6 +704,7 @@
     "workstation_skills": [
       "烤手"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 30.5,
     "avg_shifts_per_week": 7.0,
     "shift_frequency": {
@@ -704,6 +731,7 @@
     "workstation_skills": [
       "烤手"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 36.5,
     "avg_shifts_per_week": 8.5,
     "shift_frequency": {
@@ -730,6 +758,7 @@
     "workstation_skills": [
       "烤手"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 33.5,
     "avg_shifts_per_week": 7.5,
     "shift_frequency": {
@@ -756,6 +785,7 @@
     "workstation_skills": [
       "烤手"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 29.0,
     "avg_shifts_per_week": 7.0,
     "shift_frequency": {
@@ -781,6 +811,7 @@
     "workstation_skills": [
       "烤手"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 32.5,
     "avg_shifts_per_week": 7.5,
     "shift_frequency": {
@@ -807,6 +838,7 @@
     "workstation_skills": [
       "烤手"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 28.0,
     "avg_shifts_per_week": 7.0,
     "shift_frequency": {
@@ -833,6 +865,7 @@
     "workstation_skills": [
       "烤手"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 14.0,
     "avg_shifts_per_week": 3.5,
     "shift_frequency": {
@@ -858,6 +891,7 @@
     "workstation_skills": [
       "烤手"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 30.0,
     "avg_shifts_per_week": 8.0,
     "shift_frequency": {
@@ -884,6 +918,7 @@
     "workstation_skills": [
       "烤手"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 34.0,
     "avg_shifts_per_week": 8.5,
     "shift_frequency": {
@@ -909,6 +944,7 @@
     "workstation_skills": [
       "烤手"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 16.0,
     "avg_shifts_per_week": 4.0,
     "shift_frequency": {
@@ -932,6 +968,7 @@
     "workstation_skills": [
       "烤手"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 20.0,
     "avg_shifts_per_week": 5.0,
     "shift_frequency": {
@@ -955,6 +992,7 @@
     "workstation_skills": [
       "服務"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 12.0,
     "avg_shifts_per_week": 3.0,
     "shift_frequency": {
@@ -978,6 +1016,7 @@
     "workstation_skills": [
       "服務"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 34.0,
     "avg_shifts_per_week": 8.5,
     "shift_frequency": {
@@ -1002,6 +1041,7 @@
     "workstation_skills": [
       "服務"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 21.2,
     "avg_shifts_per_week": 5.5,
     "shift_frequency": {
@@ -1026,6 +1066,7 @@
     "workstation_skills": [
       "服務"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 20.0,
     "avg_shifts_per_week": 5.5,
     "shift_frequency": {
@@ -1050,6 +1091,7 @@
     "workstation_skills": [
       "服務"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 31.8,
     "avg_shifts_per_week": 9.0,
     "shift_frequency": {
@@ -1070,6 +1112,7 @@
     "workstation_skills": [
       "服務"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 0.0,
     "avg_shifts_per_week": 0.0,
     "shift_frequency": {},
@@ -1089,6 +1132,7 @@
     "workstation_skills": [
       "服務"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 15.0,
     "avg_shifts_per_week": 4.5,
     "shift_frequency": {
@@ -1111,6 +1155,7 @@
     "workstation_skills": [
       "服務"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 17.2,
     "avg_shifts_per_week": 6.5,
     "shift_frequency": {
@@ -1132,6 +1177,7 @@
     "workstation_skills": [
       "服務"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 6.0,
     "avg_shifts_per_week": 1.5,
     "shift_frequency": {
@@ -1152,6 +1198,7 @@
     "workstation_skills": [
       "服務"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 13.0,
     "avg_shifts_per_week": 4.0,
     "shift_frequency": {
@@ -1172,6 +1219,7 @@
     "workstation_skills": [
       "服務"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 25.5,
     "avg_shifts_per_week": 8.0,
     "shift_frequency": {
@@ -1193,6 +1241,7 @@
     "workstation_skills": [
       "服務"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 25.2,
     "avg_shifts_per_week": 7.5,
     "shift_frequency": {
@@ -1215,6 +1264,7 @@
     "workstation_skills": [
       "服務"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 31.5,
     "avg_shifts_per_week": 8.0,
     "shift_frequency": {
@@ -1237,6 +1287,7 @@
     "workstation_skills": [
       "服務"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 25.5,
     "avg_shifts_per_week": 6.5,
     "shift_frequency": {
@@ -1258,6 +1309,7 @@
     "workstation_skills": [
       "服務"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 30.0,
     "avg_shifts_per_week": 8.0,
     "shift_frequency": {
@@ -1276,6 +1328,7 @@
     "workstation_skills": [
       "服務"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 0.0,
     "avg_shifts_per_week": 0.0,
     "shift_frequency": {},
@@ -1292,6 +1345,7 @@
     "workstation_skills": [
       "服務"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 0.0,
     "avg_shifts_per_week": 0.0,
     "shift_frequency": {},
@@ -1311,6 +1365,7 @@
     "workstation_skills": [
       "服務"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 2.0,
     "avg_shifts_per_week": 0.5,
     "shift_frequency": {
@@ -1332,6 +1387,7 @@
     "workstation_skills": [
       "服務"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 10.0,
     "avg_shifts_per_week": 4.0,
     "shift_frequency": {
@@ -1352,6 +1408,7 @@
     "workstation_skills": [
       "服務"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 10.0,
     "avg_shifts_per_week": 4.0,
     "shift_frequency": {
@@ -1370,6 +1427,7 @@
     "workstation_skills": [
       "服務"
     ],
+    "employee_type": "ft",
     "avg_weekly_hours": 0.0,
     "avg_shifts_per_week": 0.0,
     "shift_frequency": {},
