@@ -1,0 +1,4 @@
+{
+  "_comment": "員工指定劃休。key 為 employee_id，value 為日期陣列 (YYYY-MM-DD)。每週更新。",
+  "designated_rest": {}
+}

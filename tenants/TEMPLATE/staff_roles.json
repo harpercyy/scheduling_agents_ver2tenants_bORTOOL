@@ -1,0 +1,15 @@
+{
+  "_doc": "員工技能與主管設定。key 為 employee_id（字串），value 包含 _name 與 skills。",
+  "_doc_skills": "skills 為角色名稱陣列（對應 tenant_config.json 的 workstation_roles 值），順序為優先度。",
+
+  "_manager_group": {
+    "_doc": "主管群組設定。member_ids = 主管員工 ID；daily_early/late_count = 每日最低主管人數。early_shifts/late_shifts = 主管可排的班次代碼。",
+    "member_ids": [],
+    "daily_early_count": 1,
+    "daily_late_count": 1,
+    "early_shifts": [],
+    "late_shifts": []
+  },
+
+  "_no_same_rest": []
+}

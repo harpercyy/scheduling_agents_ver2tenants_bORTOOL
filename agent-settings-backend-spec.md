@@ -163,6 +163,37 @@ Identity 層建立完成 → 解鎖後續 Layer 設定
 
 定義 Agent 從哪裡取得排班相關資料、如何解析、如何做 Identity Resolution。
 
+### 3.0 多租戶設定檔（tenant_config.json）
+
+每個租戶目錄 `tenants/<tenant>/` 必須包含 `tenant_config.json`，它是該店面所有設定的 **single source of truth**。腳本在執行時透過此檔案取得班次定義、角色對應、約束參數等。
+
+```json
+{
+  "tenant_id": "glod-pig",
+  "display_name": "金豬 燒肉",
+  "region": "TW",
+  "timezone": "Asia/Taipei",
+  "shift_defs": { "<shift_code>": { "start": "HH:MM", "end": "HH:MM", "hours": <number> } },
+  "workstation_roles": { "<shift_code>": "<role_name>" },
+  "scenarios": ["平日", "平日包場", "週末", "週末包場"],
+  "min_daily_headcount": { "weekday": 18, "saturday": 23, "sunday": 22, "package": 19 },
+  "constraints": { "min_rest_hours": 11, "max_weekly_hours": 46, "max_working_days": 5 },
+  "csv_parser": "gold_pig_v1"
+}
+```
+
+**與其他租戶檔案的關係**：
+
+| 檔案 | 職責 | 被誰讀取 |
+|------|------|---------|
+| `tenant_config.json` | 班次、角色、約束、人力需求 | Scheduler, Auditor, Analyzer |
+| `staff_roles.json` | 員工技能、主管配置、禁同休配對 | Scheduler, Auditor, Analyzer |
+| `events.json` | 包場 / 特殊事件日期 | Scheduler, Auditor |
+| `rest_days.json` | 員工指定劃休（每週更新） | Scheduler, Auditor |
+| `RULES.md` | 商業規則（人類 & AI 可讀） | Claude（決策參考） |
+
+> **詳細 schema**：請參考 `CLAUDE.md` §2.2 或 `tenants/TEMPLATE/tenant_config.json`。
+
 ### 3.1 資料來源設定
 
 ```json

@@ -26,7 +26,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from data_loader import (
     parse_roster_csv, Habit, EmployeePreference,
     habits_to_json, SHIFT_LABELS, LEAVE_TYPES,
-    merge_staff_roles,
+    merge_staff_roles, load_tenant_config,
 )
 
 
@@ -35,8 +35,11 @@ from data_loader import (
 # Shift CODE (班次代碼):       B001-B012, B101-B109, 櫃台(早), 櫃台(晚)
 # ALL B-codes → 烤手  |  櫃台(早) → 領檯早  |  櫃台(晚) → 領檯晚
 
-def shift_code_to_role(shift_code: str) -> str:
-    """Map a shift code to its workstation role (烤手 / 領檯早 / 領檯晚).
+def shift_code_to_role(shift_code: str, workstation_roles: dict = None) -> str:
+    """Map a shift code to its workstation role using tenant config.
+
+    If workstation_roles is provided (from tenant_config.json), uses that mapping.
+    Otherwise falls back to hardcoded legacy logic.
 
     Legacy '櫃台' (without 早/晚 suffix) maps to '烤手' so that historical
     CSV data doesn't accidentally grant 領檯 skills. The actual 領檯早/領檯晚
@@ -45,6 +48,9 @@ def shift_code_to_role(shift_code: str) -> str:
     if not shift_code:
         return "烤手"
     sc = shift_code.strip()
+    if workstation_roles:
+        return workstation_roles.get(sc, "烤手")
+    # Fallback: legacy hardcoded logic
     if sc == "櫃台(早)":
         return "領檯早"
     if sc == "櫃台(晚)":
@@ -270,36 +276,17 @@ def calculate_habits(identity_map: dict) -> list:
 #   領檯晚 = counter late shift  (櫃台(晚))
 # Shift code (Bxxx) is separate from workstation role.
 
-WORKSTATION_ROLE_MAP = {
-    **{f"B{n:03d}": "烤手" for n in range(1, 13)},   # B001-B012
-    **{f"B1{n:02d}": "烤手" for n in range(1, 10)},   # B101-B109
-    "櫃台(早)": "領檯早",
-    "櫃台(晚)": "領檯晚",
-}
-
-
-# Taiwan public holidays in 2026 that are not weekends
-TW_HOLIDAYS_2026 = {
-    "2026-01-01",  # 元旦
-    "2026-01-26", "2026-01-27", "2026-01-28", "2026-01-29",
-    "2026-01-30", "2026-01-31", "2026-02-01",  # 春節
-    "2026-02-28",  # 和平紀念日
-    "2026-04-04",  # 兒童節/清明
-    "2026-04-05",  # 清明補假
-    "2026-05-01",  # 勞動節
-    "2026-06-19",  # 端午節
-    "2026-09-29",  # 中秋節
-    "2026-10-10",  # 國慶日
-}
-
-
-def is_holiday(date_str: str) -> bool:
-    """Return True if date is a weekend or public holiday."""
+def is_holiday(date_str: str, holidays: set = None) -> bool:
+    """Return True if date is a weekend or in the holidays set.
+    Args:
+        date_str: Date in 'YYYY-MM-DD' format.
+        holidays: Set of holiday date strings from tenant config. If None, uses empty set.
+    """
     try:
         d = datetime.strptime(date_str, "%Y-%m-%d")
         if d.weekday() >= 5:  # Sat=5, Sun=6
             return True
-        return date_str in TW_HOLIDAYS_2026
+        return date_str in (holidays or set())
     except ValueError:
         # Fallback for short date strings like '1-5'
         return False
@@ -382,7 +369,9 @@ def analyze_shift_coverage(identity_map: dict) -> dict:
 
 # ─── Store Demand Analysis (Goal 2) ───────────────────────────────────────────
 
-def analyze_store_demand(csv_paths: list, identity_map: dict) -> dict:
+def analyze_store_demand(csv_paths: list, identity_map: dict,
+                         workstation_roles: dict = None,
+                         holidays: set = None) -> dict:
     """
     Analyze 4-scenario staffing demand:
       平日無包場 / 平日有包場 / 假日無包場 / 假日有包場
@@ -392,7 +381,7 @@ def analyze_store_demand(csv_paths: list, identity_map: dict) -> dict:
       - 櫃台早班, 櫃台晚班
 
     包場 detection: derived from 營運備註 row in each CSV file.
-    Workstation role: mapped via WORKSTATION_ROLE_MAP.
+    Workstation role: mapped via tenant_config.workstation_roles.
     """
     from datetime import datetime
 
@@ -464,7 +453,8 @@ def analyze_store_demand(csv_paths: list, identity_map: dict) -> dict:
             date_str = s.date  # short form '1-5'
 
             # Workstation role
-            role = WORKSTATION_ROLE_MAP.get(s.workstation, None) if s.workstation else None
+            role = (workstation_roles.get(s.workstation, None)
+                    if workstation_roles and s.workstation else None)
 
             if role in ("領檯早", "領檯晚"):
                 pass  # already classified
@@ -508,7 +498,7 @@ def analyze_store_demand(csv_paths: list, identity_map: dict) -> dict:
             month, day = int(parts[0]), int(parts[1])
             year = 2026 if month <= 6 else 2025
             full_date = f"{year}-{month:02d}-{day:02d}"
-            is_hol = is_holiday(full_date)
+            is_hol = is_holiday(full_date, holidays)
         except (ValueError, IndexError):
             is_hol = False
 
@@ -632,7 +622,16 @@ def run_analyzer(csv_paths: list, output_path: str = "habits.json"):
         print(f"   {slot_zh}: 平均 {data['avg_headcount']} 人")
 
     # Step 5: Store demand analysis — Goal 2
-    demand_profile = analyze_store_demand(roster_paths, identity_map)
+    # Load tenant config for workstation_roles and holidays
+    tenant_config = None
+    workstation_roles = None
+    holidays = None
+    if tenant_dir and os.path.exists(os.path.join(tenant_dir, "tenant_config.json")):
+        tenant_config = load_tenant_config(tenant_dir)
+        workstation_roles = tenant_config.workstation_roles
+        holidays = tenant_config.region_holidays
+    demand_profile = analyze_store_demand(roster_paths, identity_map,
+                                          workstation_roles, holidays)
     print_demand_profile(demand_profile)
 
     # Step 6: Output habits.json
@@ -659,14 +658,13 @@ def run_analyzer(csv_paths: list, output_path: str = "habits.json"):
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print("用法: python analyzer.py <CSV路徑或資料夾> [輸出路徑]")
+        print("用法: python analyzer.py <tenant目錄或CSV路徑> [輸出路徑]")
         print("範例:")
-        print("  python analyzer.py 'tenants/glod-pig/'")
-        print("  python analyzer.py 'tenants/glod-pig/*.csv' habits.json")
+        print("  python analyzer.py tenants/glod-pig/")
+        print("  python analyzer.py tenants/glod-pig/ tenants/glod-pig/output/habits.json")
         sys.exit(1)
 
     input_path = sys.argv[1]
-    output_path = sys.argv[2] if len(sys.argv) > 2 else "habits.json"
 
     # Resolve input to list of CSV files
     if os.path.isdir(input_path):
@@ -679,6 +677,16 @@ if __name__ == "__main__":
     if not csv_paths:
         print(f"❌ 找不到 CSV 檔案: {input_path}")
         sys.exit(1)
+
+    # Default output: tenants/<tenant>/output/habits.json
+    if len(sys.argv) > 2:
+        output_path = sys.argv[2]
+    elif os.path.isdir(input_path) and os.path.exists(os.path.join(input_path, "tenant_config.json")):
+        out_dir = os.path.join(input_path, "output")
+        os.makedirs(out_dir, exist_ok=True)
+        output_path = os.path.join(out_dir, "habits.json")
+    else:
+        output_path = "habits.json"
 
     print(f"📁 找到 {len(csv_paths)} 個 CSV 檔案")
     run_analyzer(csv_paths, output_path)

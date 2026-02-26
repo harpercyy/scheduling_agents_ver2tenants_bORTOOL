@@ -4,8 +4,7 @@
     "chinese_name": "林靜宜",
     "english_name": "Sherry",
     "preferred_shifts": [
-      "B104",
-      "B106"
+      "B104"
     ],
     "available_hour_range": null,
     "overtime_willingness": null,
@@ -817,7 +816,7 @@
       "B106": 1
     },
     "workstation_frequency": {
-      "服務": 6
+      "烤手": 6
     }
   },
   {
@@ -832,7 +831,7 @@
     "overtime_willingness": "flexible",
     "rotation_flexibility": null,
     "workstation_skills": [
-      "服務"
+      "烤手"
     ],
     "avg_weekly_hours": 14.0,
     "avg_shifts_per_week": 3.5,
@@ -841,7 +840,7 @@
       "B011": 1
     },
     "workstation_frequency": {
-      "服務": 2
+      "烤手": 2
     }
   },
   {
@@ -857,7 +856,7 @@
     "overtime_willingness": null,
     "rotation_flexibility": null,
     "workstation_skills": [
-      "服務"
+      "烤手"
     ],
     "avg_weekly_hours": 30.0,
     "avg_shifts_per_week": 8.0,
@@ -867,7 +866,7 @@
       "B106": 1
     },
     "workstation_frequency": {
-      "服務": 8
+      "烤手": 8
     }
   },
   {
@@ -883,7 +882,7 @@
     "overtime_willingness": null,
     "rotation_flexibility": null,
     "workstation_skills": [
-      "服務"
+      "烤手"
     ],
     "avg_weekly_hours": 34.0,
     "avg_shifts_per_week": 8.5,
@@ -893,7 +892,7 @@
       "B003": 2
     },
     "workstation_frequency": {
-      "服務": 9
+      "烤手": 9
     }
   },
   {
@@ -908,7 +907,7 @@
     "overtime_willingness": "no_overtime",
     "rotation_flexibility": null,
     "workstation_skills": [
-      "服務"
+      "烤手"
     ],
     "avg_weekly_hours": 16.0,
     "avg_shifts_per_week": 4.0,
@@ -917,7 +916,7 @@
       "B004": 2
     },
     "workstation_frequency": {
-      "服務": 4
+      "烤手": 4
     }
   },
   {
@@ -931,7 +930,7 @@
     "overtime_willingness": null,
     "rotation_flexibility": null,
     "workstation_skills": [
-      "服務"
+      "烤手"
     ],
     "avg_weekly_hours": 20.0,
     "avg_shifts_per_week": 5.0,
@@ -939,7 +938,7 @@
       "B003": 5
     },
     "workstation_frequency": {
-      "服務": 5
+      "烤手": 5
     }
   },
   {

@@ -1,0 +1,40 @@
+{
+  "_doc": "租戶設定檔。複製此檔案到新租戶目錄後，依實際情況填入所有欄位。",
+
+  "tenant_id": "CHANGE_ME",
+  "display_name": "店面名稱",
+  "region": "TW",
+  "timezone": "Asia/Taipei",
+
+  "shift_defs": {
+    "_doc": "班次定義：每個班次代碼對應 start（上班）、end（下班）、hours（實際工時，已扣休息）",
+    "A001": { "start": "08:00", "end": "17:00", "hours": 8 },
+    "A002": { "start": "09:00", "end": "18:00", "hours": 8 }
+  },
+
+  "workstation_roles": {
+    "_doc": "班次代碼 → 崗位角色對應。角色名稱可自訂（如 烤手、外場、吧檯、領檯早...）",
+    "A001": "外場",
+    "A002": "外場"
+  },
+
+  "scenarios": ["平日", "平日包場", "週末", "週末包場"],
+
+  "min_daily_headcount": {
+    "_doc": "各日類型的最低總人力需求。設為 0 表示不強制。",
+    "weekday": 0,
+    "saturday": 0,
+    "sunday": 0,
+    "package": 0
+  },
+
+  "constraints": {
+    "_doc": "勞動約束參數。未設定的欄位使用系統預設值。",
+    "min_rest_hours": 11,
+    "max_weekly_hours": 46,
+    "max_working_days": 5,
+    "std_weekly_hours": 40
+  },
+
+  "csv_parser": "generic"
+}

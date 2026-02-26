@@ -46,6 +46,122 @@ WORKSTATION_CODES = [
 ]
 
 
+# ─── Region Holidays ─────────────────────────────────────────────────────────
+
+REGION_HOLIDAYS = {
+    "TW": {
+        2026: {
+            "2026-01-01",                                             # 元旦
+            "2026-01-26", "2026-01-27", "2026-01-28", "2026-01-29",  # 春節
+            "2026-01-30", "2026-01-31", "2026-02-01",                # 春節
+            "2026-02-28",                                             # 和平紀念日
+            "2026-04-04", "2026-04-05",                               # 兒童節/清明
+            "2026-05-01",                                             # 勞動節
+            "2026-06-19",                                             # 端午節
+            "2026-09-29",                                             # 中秋節
+            "2026-10-10",                                             # 國慶日
+        },
+    },
+}
+
+
+def get_region_holidays(region: str) -> set:
+    """Return all holiday date strings for a region (all years merged)."""
+    region_data = REGION_HOLIDAYS.get(region, {})
+    holidays = set()
+    for year_holidays in region_data.values():
+        holidays.update(year_holidays)
+    return holidays
+
+
+def is_holiday_for_region(date_str: str, holidays: set) -> bool:
+    """Return True if date is a weekend or in the holidays set."""
+    from datetime import datetime
+    try:
+        d = datetime.strptime(date_str, "%Y-%m-%d")
+        if d.weekday() >= 5:  # Sat=5, Sun=6
+            return True
+        return date_str in holidays
+    except ValueError:
+        return False
+
+
+# ─── Tenant Configuration ────────────────────────────────────────────────────
+
+@dataclass
+class TenantConfig:
+    """Multi-tenant configuration loaded from tenants/<name>/tenant_config.json."""
+    tenant_id: str
+    display_name: str
+    region: str
+    timezone: str
+    shift_defs: dict           # {code: {start, end, hours}}
+    workstation_roles: dict    # {code: role_name}
+    scenarios: list = field(default_factory=lambda: ["平日", "平日包場", "週末", "週末包場"])
+    min_daily_headcount: dict = field(default_factory=lambda: {
+        "weekday": 0, "saturday": 0, "sunday": 0, "package": 0
+    })
+    constraints: dict = field(default_factory=lambda: {
+        "min_rest_hours": 11, "max_weekly_hours": 46,
+        "max_working_days": 5, "std_weekly_hours": 40,
+    })
+    csv_parser: str = "generic"
+    region_holidays: set = field(default_factory=set)  # populated by load_tenant_config
+
+
+def load_tenant_config(tenant_dir: str) -> TenantConfig:
+    """Load and validate tenant_config.json from a tenant directory."""
+    config_path = os.path.join(tenant_dir, "tenant_config.json")
+    if not os.path.exists(config_path):
+        raise FileNotFoundError(f"tenant_config.json not found in {tenant_dir}")
+
+    with open(config_path, encoding="utf-8") as f:
+        data = json.load(f)
+
+    # Strip doc comments (keys starting with _doc)
+    data = {k: v for k, v in data.items() if not k.startswith("_doc")}
+    for key in ["shift_defs", "workstation_roles", "min_daily_headcount", "constraints"]:
+        if isinstance(data.get(key), dict):
+            data[key] = {k: v for k, v in data[key].items() if not k.startswith("_doc")}
+
+    # Required fields
+    for req in ("tenant_id", "display_name", "region", "timezone", "shift_defs", "workstation_roles"):
+        if req not in data:
+            raise ValueError(f"tenant_config.json missing required field: {req}")
+
+    # Merge defaults for optional nested dicts
+    default_constraints = {"min_rest_hours": 11, "max_weekly_hours": 46,
+                           "max_working_days": 5, "std_weekly_hours": 40}
+    constraints = {**default_constraints, **(data.get("constraints") or {})}
+
+    default_headcount = {"weekday": 0, "saturday": 0, "sunday": 0, "package": 0}
+    headcount = {**default_headcount, **(data.get("min_daily_headcount") or {})}
+
+    # Load region holidays
+    holidays = get_region_holidays(data["region"])
+
+    config = TenantConfig(
+        tenant_id=data["tenant_id"],
+        display_name=data["display_name"],
+        region=data["region"],
+        timezone=data["timezone"],
+        shift_defs=data["shift_defs"],
+        workstation_roles=data["workstation_roles"],
+        scenarios=data.get("scenarios", ["平日", "平日包場", "週末", "週末包場"]),
+        min_daily_headcount=headcount,
+        constraints=constraints,
+        csv_parser=data.get("csv_parser", "generic"),
+        region_holidays=holidays,
+    )
+
+    print(f"📋 租戶設定: {config.display_name} ({config.tenant_id})")
+    print(f"   班次定義: {len(config.shift_defs)} 個")
+    print(f"   角色對應: {len(config.workstation_roles)} 個")
+    print(f"   地區假日: {config.region} ({len(config.region_holidays)} 天)")
+
+    return config
+
+
 # ─── Data Models ──────────────────────────────────────────────────────────────
 
 @dataclass
@@ -504,6 +620,34 @@ def _parse_weekly_stats(row: list, dates: list) -> dict:
             break
 
     return stats
+
+
+# ─── CSV Parser Registry ─────────────────────────────────────────────────────
+
+_CSV_PARSERS = {
+    "gold_pig_v1": parse_roster_csv,   # Gold Pig style multi-row per employee
+    "generic": parse_roster_csv,       # Alias — defaults to gold_pig_v1 for now
+}
+
+
+def get_csv_parser(parser_id: str):
+    """Return the CSV parser function for a given parser ID.
+    Raises ValueError if the parser ID is not registered.
+    """
+    parser = _CSV_PARSERS.get(parser_id)
+    if parser is None:
+        available = ", ".join(sorted(_CSV_PARSERS.keys()))
+        raise ValueError(f"Unknown CSV parser: '{parser_id}'. Available: {available}")
+    return parser
+
+
+def register_csv_parser(parser_id: str, parser_func):
+    """Register a new CSV parser function.
+    Args:
+        parser_id: Unique identifier for the parser.
+        parser_func: Callable that takes a CSV path and returns list of Employee.
+    """
+    _CSV_PARSERS[parser_id] = parser_func
 
 
 # ─── Serialization helpers ────────────────────────────────────────────────────

@@ -20,8 +20,8 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from data_loader import load_habits_json, WORKSTATION_CODES
-from ortools_solver import SHIFT_DEFS, is_holiday, load_rest_days, load_manager_config
+from data_loader import load_habits_json, WORKSTATION_CODES, load_tenant_config
+from ortools_solver import is_holiday, load_rest_days, load_manager_config
 
 
 # ─── Violation Model ─────────────────────────────────────────────────────────
@@ -104,21 +104,29 @@ def parse_time(t: str) -> int:
 
 # ─── P0: Labor Law Checks ────────────────────────────────────────────────────
 
-def check_p0_labor_law(grouped_by_emp: dict, rest_days: dict = None) -> list:
+def check_p0_labor_law(grouped_by_emp: dict, rest_days: dict = None,
+                       tenant_config=None) -> list:
     """
     P0 — 勞基法 compliance checks.
     These are legal requirements; violations must be fixed immediately.
+    Args:
+        tenant_config: TenantConfig instance for shift_defs and constraints.
     """
     violations = []
     rest_days = rest_days or {}
+    shift_defs = tenant_config.shift_defs if tenant_config else {}
+    constraints = tenant_config.constraints if tenant_config else {}
+    min_rest_hours = constraints.get("min_rest_hours", 11)
+    max_weekly_hours = constraints.get("max_weekly_hours", 46)
+    max_working_days = constraints.get("max_working_days", 5)
 
     for eid, entries in grouped_by_emp.items():
         working_entries = [e for e in entries if not e.get("leave_type")]
 
-        # P0-001: Max 12 hours per single shift (use SHIFT_DEFS hours, which deduct breaks)
+        # P0-001: Max 12 hours per single shift (use shift_defs hours, which deduct breaks)
         for e in working_entries:
             sc = e.get("workstation", "")
-            defn = SHIFT_DEFS.get(sc)
+            defn = shift_defs.get(sc)
             if defn:
                 hours = defn["hours"]
             else:
@@ -161,13 +169,13 @@ def check_p0_labor_law(grouped_by_emp: dict, rest_days: dict = None) -> list:
                 day_diff = 0
 
             gap_mins = (day_diff * 24 * 60 + nxt_start) - curr_end
-            if 0 < gap_mins < 11 * 60:
+            if 0 < gap_mins < min_rest_hours * 60:
                 gap_h = gap_mins / 60
                 violations.append(Violation(
                     priority="P0",
                     rule_id="P0-002",
                     description=(f"員工 {eid} 在 {curr['date']} 與 {nxt['date']} "
-                                 f"之間休息時間不足 11 小時（{gap_h:.1f}h）"),
+                                 f"之間休息時間不足 {min_rest_hours} 小時（{gap_h:.1f}h）"),
                     employee_id=eid,
                     date=nxt["date"],
                     suggestion="避免晚班後接早班，或增加中間間隔",
@@ -190,7 +198,7 @@ def check_p0_labor_law(grouped_by_emp: dict, rest_days: dict = None) -> list:
                 total_h = 0.0
                 for e in week_entries:
                     sc = e.get("workstation", "")
-                    defn = SHIFT_DEFS.get(sc)
+                    defn = shift_defs.get(sc)
                     if defn:
                         total_h += defn["hours"]
                     else:
@@ -201,11 +209,11 @@ def check_p0_labor_law(grouped_by_emp: dict, rest_days: dict = None) -> list:
                         if end < s:
                             end += 24 * 60
                         total_h += (end - s) / 60.0
-                if total_h > 46:
+                if total_h > max_weekly_hours:
                     violations.append(Violation(
                         priority="P0",
                         rule_id="P0-003",
-                        description=(f"員工 {eid} 在週 {week} 累計工時超過 46 小時"
+                        description=(f"員工 {eid} 在週 {week} 累計工時超過 {max_weekly_hours} 小時"
                                      f"（{total_h:.1f}h）"),
                         employee_id=eid,
                         suggestion="減少加班或調整班次",
@@ -222,14 +230,14 @@ def check_p0_labor_law(grouped_by_emp: dict, rest_days: dict = None) -> list:
             except ValueError:
                 pass
         for week_key, dates in weeks_days.items():
-            if len(dates) > 5:
+            if len(dates) > max_working_days:
                 violations.append(Violation(
                     priority="P0",
                     rule_id="P0-004",
                     description=(f"員工 {eid} 在週 {week_key} 工作 {len(dates)} 天，"
-                                 f"超過一例一休上限 5 天"),
+                                 f"超過一例一休上限 {max_working_days} 天"),
                     employee_id=eid,
-                    suggestion="減少至最多 5 天工作，確保至少 2 天休息（一例一休）",
+                    suggestion=f"減少至最多 {max_working_days} 天工作，確保至少 {7 - max_working_days} 天休息（一例一休）",
                 ))
 
         # P0-005: Designated rest days must not have shifts
@@ -281,11 +289,16 @@ def check_hard_constraints(entries: list, habits_map: dict) -> list:
 
 def check_p1_tenant_rules(entries: list, coverage_targets: dict = None,
                           min_daily_headcount: dict = None,
-                          manager_config: dict = None) -> list:
+                          manager_config: dict = None,
+                          tenant_config=None) -> list:
     """
     P1 — Tenant-defined business rules.
     Coverage minimums, role requirements, manager shift rules, etc.
+    Args:
+        tenant_config: TenantConfig instance for shift_defs and holidays.
     """
+    shift_defs = tenant_config.shift_defs if tenant_config else {}
+    holidays = tenant_config.region_holidays if tenant_config else set()
     violations = []
 
     if not coverage_targets:
@@ -338,7 +351,7 @@ def check_p1_tenant_rules(entries: list, coverage_targets: dict = None,
             if dt.weekday() == 5:  # Saturday
                 required = saturday_min
                 day_type = "週六"
-            elif dt.weekday() == 6 or is_holiday(date):  # Sunday / holiday
+            elif dt.weekday() == 6 or is_holiday(date, holidays):  # Sunday / holiday
                 required = sunday_min
                 day_type = "週日/假日"
             else:
@@ -366,7 +379,7 @@ def check_p1_tenant_rules(entries: list, coverage_targets: dict = None,
         daily_late = manager_config.get("daily_late_count", 1)
 
         def _shift_start_hour(ws):
-            defn = SHIFT_DEFS.get(ws)
+            defn = shift_defs.get(ws)
             return int(defn["start"].split(":")[0]) if defn else 12
 
         # Early/late shifts from config, fallback to hour-based threshold
@@ -655,10 +668,17 @@ def run_auditor(schedule_path: str, habits_path: str = None,
         habits_map = {h.employee_id: h for h in habits}
         print(f"📂 載入 {len(habits_map)} 位員工習慣資料")
 
+    # Load tenant config
+    tenant_config = None
+    if tenant_dir and os.path.exists(os.path.join(tenant_dir, "tenant_config.json")):
+        tenant_config = load_tenant_config(tenant_dir)
+        print(f"🏪 租戶: {tenant_config.display_name} ({tenant_config.tenant_id})")
+
     # Load rest_days and manager_config from tenant dir
     rest_days_dates = {}   # {employee_id: set of date strings}
     manager_config = {}
-    min_daily_headcount = {"weekday": 18, "saturday": 23, "sunday": 22, "package": 19}
+    min_daily_headcount = (tenant_config.min_daily_headcount if tenant_config
+                           else {"weekday": 0, "saturday": 0, "sunday": 0, "package": 0})
 
     if tenant_dir:
         # Load manager config
@@ -702,13 +722,15 @@ def run_auditor(schedule_path: str, habits_path: str = None,
     all_violations = []
 
     # P0: Use combined data for cross-week 11h rest detection
-    p0 = check_p0_labor_law(combined_by_emp, rest_days=rest_days_dates)
+    p0 = check_p0_labor_law(combined_by_emp, rest_days=rest_days_dates,
+                            tenant_config=tenant_config)
     all_violations.extend(p0)
     hard = check_hard_constraints(entries, habits_map)
     all_violations.extend(hard)
     p1 = check_p1_tenant_rules(entries, coverage_targets,
                                 min_daily_headcount=min_daily_headcount,
-                                manager_config=manager_config)
+                                manager_config=manager_config,
+                                tenant_config=tenant_config)
     all_violations.extend(p1)
     # P1-SC6/SC7: Use combined data for cross-week rhythm detection
     p1_rhythm = check_p1_rhythm(combined_by_emp, current_week_start=week_start)
@@ -759,8 +781,7 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         print("用法: python auditor_tools.py <schedule.csv|json> [habits.json] [輸出路徑] [tenant目錄] [週起始] [前週班表]")
         print("範例:")
-        print("  python auditor_tools.py schedule.csv habits.json audit_report.json tenants/glod-pig 2026-03-02")
-        print("  python auditor_tools.py schedule_0309.csv habits.json audit_0309.json tenants/glod-pig 2026-03-09 schedule_0302.csv")
+        print("  python auditor_tools.py tenants/glod-pig/output/schedule_0302.csv tenants/glod-pig/output/habits.json audit_0302.json tenants/glod-pig 2026-03-02")
         sys.exit(1)
 
     schedule_path      = sys.argv[1]
@@ -769,6 +790,13 @@ if __name__ == "__main__":
     tenant_dir         = sys.argv[4] if len(sys.argv) > 4 else None
     week_start         = sys.argv[5] if len(sys.argv) > 5 else None
     prev_schedule_path = sys.argv[6] if len(sys.argv) > 6 else None
+
+    # Auto-resolve output path to tenant output dir
+    if tenant_dir and output_path == "audit_report.json":
+        out_dir = os.path.join(tenant_dir, "output")
+        os.makedirs(out_dir, exist_ok=True)
+        tag = week_start.replace("-", "")[4:] if week_start else "auto"
+        output_path = os.path.join(out_dir, f"audit_{tag}.json")
 
     report = run_auditor(schedule_path, habits_path, output_path,
                          tenant_dir=tenant_dir, week_start=week_start,

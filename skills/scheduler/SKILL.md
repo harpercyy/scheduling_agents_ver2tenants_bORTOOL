@@ -1,14 +1,17 @@
 ---
 name: scheduler
-description: Generate an optimized weekly roster using CP-SAT solver. Takes habits.json and habits_demand_shift.json as input, produces schedule.csv and schedule.json. Retries automatically with relaxed constraints if infeasible.
+description: Generate an optimized weekly roster using CP-SAT solver. Reads tenant_config.json for shift definitions and constraints. Takes habits.json and habits_demand_shift.json as input, produces schedule.csv and schedule.json. Retries automatically with relaxed constraints if infeasible.
 ---
 
 # Scheduler Skill
 
+> **前置條件**：先讀取 `CLAUDE.md` 了解多租戶架構。
+
 ## Overview
 
 The Scheduler uses Google OR-Tools **CP-SAT** to generate a weekly roster that:
-- Reads **demand profiles** (`habits_demand_shift.json`) for 4 staffing scenarios
+- Reads **tenant configuration** (`tenant_config.json`) for shift definitions, roles, and constraints
+- Reads **demand profiles** (`habits_demand_shift.json`) for scenario-based staffing requirements
 - Satisfies **hard constraints** (one shift/day, minimum rest, hours cap, skill match)
 - Optimizes **soft objectives** (demand coverage, shift preference, fairness, shift frequency)
 - **Retries automatically** with relaxed constraints if infeasible
@@ -22,36 +25,51 @@ The Scheduler uses Google OR-Tools **CP-SAT** to generate a weekly roster that:
 
 ## Inputs
 
-| Item | Description |
-|------|-------------|
-| `habits.json` | Output from the Analyzer skill |
-| `habits_demand_shift.json` | Demand profile: per-scenario shift code headcounts |
-| `week_start_date` | e.g. `2026-03-02` (Monday of the target week) |
-| `tenant_dir` (optional) | Tenant folder containing `events.json` for package dates |
+| Item | Source | Description |
+|------|--------|-------------|
+| `habits.json` | Analyzer output | Employee habit model |
+| `habits_demand_shift.json` | Demand analysis output | Per-scenario shift code headcounts |
+| `week_start_date` | User specified | e.g. `2026-03-02` (Monday of target week) |
+| `tenant_dir` | `tenants/<tenant>/` | Tenant folder containing config files |
+| `prev_schedule.csv` | Previous run (optional) | For cross-week constraints |
+
+### Key Tenant Config Fields Used
+
+| Field | From | Purpose |
+|-------|------|---------|
+| `shift_defs` | `tenant_config.json` | Defines all shift codes (start, end, hours) |
+| `workstation_roles` | `tenant_config.json` | Maps shift codes to roles |
+| `min_daily_headcount` | `tenant_config.json` | Minimum staffing per day type |
+| `constraints` | `tenant_config.json` | min_rest_hours, max_weekly_hours, max_working_days |
+| `_manager_group` | `staff_roles.json` | Manager coverage requirements |
+| `_no_same_rest` | `staff_roles.json` | Pairs that cannot rest on same day |
+| `package_dates` | `events.json` | Private event dates (affects scenario detection) |
+| `designated_rest` | `rest_days.json` | Employee-designated rest days |
 
 ### Demand Profile Format (`habits_demand_shift.json`)
 
+Scenario names must match `tenant_config.json → scenarios`:
+
 ```json
 {
-  "平日無包場": {
-    "烤手": { "B103": 5, "B104": 3, "B009": 3, "B010": 3, "B008": 3, "B003": 1 },
-    "櫃台早班": { "櫃台": 1 },
-    "櫃台晚班": { "櫃台": 1 }
+  "平日": {
+    "烤手": { "B103": 5, "B104": 3, "B009": 3, "B010": 3 },
+    "領檯": { "櫃台(早)": 1, "櫃台(晚)": 1 }
   },
-  "假日無包場": { ... },
-  "平日有包場": { ... },
-  "假日有包場": { ... }
+  "週末": { ... },
+  "平日包場": { ... },
+  "週末包場": { ... }
 }
 ```
 
-Scenarios are selected per day based on weekday/weekend x package dates from `events.json`.
+> Role names (烤手, 領檯) must match `tenant_config.json → workstation_roles` values.
 
 ---
 
 ## Quick Start
 
 ```bash
-python scripts/ortools_solver.py habits.json habits_demand_shift.json schedule 2026-03-02 tenants/glod-pig
+python scripts/ortools_solver.py habits.json habits_demand_shift.json schedule_0302 2026-03-02 tenants/<tenant>
 ```
 
 ---
@@ -68,16 +86,19 @@ pip install ortools  # Google OR-Tools (includes CP-SAT)
 
 ```bash
 # Run Analyzer first if habits.json is missing or stale
-python scripts/analyzer.py tenants/glod-pig/ habits.json
+python scripts/analyzer.py tenants/<tenant>/ habits.json
 
 # Verify demand profile exists
 cat habits_demand_shift.json
+
+# Verify tenant config
+cat tenants/<tenant>/tenant_config.json
 ```
 
 ### Step 3 — Run the Scheduler
 
 ```bash
-python scripts/ortools_solver.py <habits.json> <demand_shift.json> [output_prefix] [week_start] [tenant_dir]
+python scripts/ortools_solver.py <habits.json> <demand_shift.json> [output_prefix] [week_start] [tenant_dir] [prev_schedule]
 ```
 
 **Arguments:**
@@ -88,41 +109,41 @@ python scripts/ortools_solver.py <habits.json> <demand_shift.json> [output_prefi
 | `output_prefix` | `schedule` | `schedule_0302` |
 | `week_start` | next Monday | `2026-03-02` |
 | `tenant_dir` | none | `tenants/glod-pig` |
+| `prev_schedule` | none | `schedule_0302.csv` |
 
-**Full example:**
+**Examples:**
 ```bash
+# First week of a tenant
 python scripts/ortools_solver.py habits.json habits_demand_shift.json schedule_0302 2026-03-02 tenants/glod-pig
+
+# Second week with cross-week constraints
+python scripts/ortools_solver.py habits.json habits_demand_shift.json schedule_0309 2026-03-09 tenants/glod-pig schedule_0302.csv
 ```
 
 ### Step 4 — Verify outputs
 
 Two files are created:
 
-**`schedule.csv`** — flat table, one row per shift assignment:
+**`schedule_<prefix>.csv`** — flat table, one row per shift assignment:
 ```
 date,day_of_week,employee_id,employee_name,shift_start,shift_end,workstation,workstation_role,leave_type
-2026-03-02,週一,3,史曜誠 (Money),12:00,22:00,B106,烤手,
-2026-03-02,週一,6,陳恩齊 (Eggsy),10:00,19:00,B003,烤手,
 ```
 
-**`schedule.json`** — includes `schedule` array + `stats`:
+**`schedule_<prefix>.json`** — includes `schedule` array + `stats`:
 ```json
 {
   "schedule": [...],
   "stats": {
-    "employee_weekly_hours": {"3": 40.0, "6": 40.0},
-    "daily_coverage_by_shift": {
-      "B103": [5, 5, 5, 5, 5, 6, 6],
-      "B104": [3, 3, 3, 3, 3, 2, 2]
-    },
-    "day_scenarios": ["平日無包場", "平日無包場", ...]
+    "employee_weekly_hours": { "3": 40.0 },
+    "daily_coverage_by_shift": { "B103": [5, 5, 5, 5, 5, 6, 6] },
+    "day_scenarios": ["平日", "平日", "平日", "平日", "平日", "週末", "週末"]
   }
 }
 ```
 
 ### Step 5 — Handle INFEASIBLE
 
-If constraints cannot be satisfied, the solver **automatically retries** up to 3 times, progressively relaxing:
+The solver **automatically retries** up to 3 times, progressively relaxing:
 
 | Level | SC1 Demand | SC2 Preference | SC3 Fairness | SC4 No-OT | SC5 Frequency |
 |-------|-----------|----------------|--------------|-----------|---------------|
@@ -130,12 +151,12 @@ If constraints cannot be satisfied, the solver **automatically retries** up to 3
 | 1 | W=100 | Off | Active | Off | Off |
 | 2 | target=1 | Off | Active | Off | Off |
 
-If all three levels fail, check employee count vs demand totals.
+If all three levels fail, check employee count vs demand totals in `tenant_config.json`.
 
 ### Step 6 — Pass to Auditor
 
 ```bash
-python scripts/auditor_tools.py schedule.csv habits.json audit_report.json
+python scripts/auditor_tools.py schedule_0302.csv habits.json audit_0302.json tenants/<tenant> 2026-03-02
 ```
 
 ---
@@ -144,19 +165,24 @@ python scripts/auditor_tools.py schedule.csv habits.json audit_report.json
 
 | ID | Name | Weight | Description |
 |----|------|--------|-------------|
-| SC1 | Demand Coverage | W_VAC=100 | Penalizes both shortage and overstaffing per shift code per day. Shifts with zero demand are heavily penalized. |
-| SC2 | Shift Preference | W_PREF=10 | Matches `preferred_shifts` — supports both shift codes (B106, B009) and time labels (morning, afternoon, evening). Rank 0 = no penalty. |
-| SC3 | Fairness | W_FAIRNESS=15 | Personalized target from `avg_shifts_per_week` (values >7 halved as biweekly data, clamped [1,6], default 5). Penalizes both over- and under-scheduling. |
-| SC4 | No-Overtime | W_EMPLOYEE_SOFT=8 | Penalizes late shifts (start >= 17:00) for `no_overtime` employees. |
-| SC5 | Shift Frequency | W_SHIFT=5 | Uses `shift_frequency` history. Penalty inversely proportional to frequency — most-worked shift = 0 penalty. |
+| SC1 | Demand Coverage | W_VAC=100 | Penalizes shortage and overstaffing per shift code per day |
+| SC2 | Shift Preference | W_PREF=10 | Matches `preferred_shifts` — supports shift codes and time labels |
+| SC3 | Fairness | W_FAIRNESS=15 | Personalized target from `avg_shifts_per_week` |
+| SC4 | No-Overtime | W_EMPLOYEE_SOFT=8 | Penalizes late shifts for `no_overtime` employees |
+| SC5 | Shift Frequency | W_SHIFT=5 | Uses `shift_frequency` history |
+| SC6 | No 5-day streak | W_CONSEC5=30 | Penalizes 5+ consecutive working days (including cross-week) |
+| SC7 | No work-rest-work | W_ALTERNATE=15 | Penalizes isolated rest days (including cross-week) |
 
 ## Hard Constraint Reference
 
 | Rule | Behaviour |
 |------|-----------|
 | One shift per employee per day | Always enforced |
-| At most 6 days per week | Always enforced |
-| >= 11 hours rest (late shift -> no early next day) | Always enforced |
-| <= 46 hours/week (using SHIFT_DEFS hours) | Always enforced |
+| Max working days per week | From `tenant_config.json → constraints.max_working_days` |
+| Min rest between shifts | From `tenant_config.json → constraints.min_rest_hours` |
+| Max weekly hours | From `tenant_config.json → constraints.max_weekly_hours` |
 | Skill match (workstation_skills) | Always enforced |
-| Demand minimum per shift code per day | Always enforced (relaxed to 1 at Level 2) |
+| Designated rest days | Always enforced (labor law) |
+| Manager coverage | From `staff_roles.json → _manager_group` |
+| No-same-rest pairs | From `staff_roles.json → _no_same_rest` |
+| Demand minimum per shift code | Always enforced (relaxed to 1 at Level 2) |

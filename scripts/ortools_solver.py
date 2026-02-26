@@ -26,7 +26,8 @@ from datetime import datetime, timedelta
 from collections import defaultdict
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from data_loader import Habit, ScheduleEntry, load_habits_json, merge_staff_roles
+from data_loader import (Habit, ScheduleEntry, load_habits_json, merge_staff_roles,
+                          load_tenant_config, get_region_holidays)
 
 try:
     from ortools.sat.python import cp_model
@@ -35,70 +36,25 @@ except ImportError:
     sys.exit(1)
 
 
-# ─── Shift Definitions (from 班次.csv) ────────────────────────────────────────
+# ─── DEPRECATED: SHIFT_DEFS placeholder ─────────────────────────────────────
+# Kept as empty dict for backward compatibility (auditor_tools.py imports this).
+# Real shift definitions are loaded from tenant_config.json via load_tenant_config().
+# TODO: Remove once auditor_tools.py is decoupled (Step 5).
+SHIFT_DEFS = {}
 
-SHIFT_DEFS = {
-    # 正職 8h (休1H)
-    "B001": {"start": "08:00", "end": "17:00", "hours": 8},
-    "B002": {"start": "09:00", "end": "18:00", "hours": 8},
-    "B003": {"start": "10:00", "end": "19:00", "hours": 8},
-    "B004": {"start": "11:00", "end": "20:00", "hours": 8},
-    "B005": {"start": "11:30", "end": "20:30", "hours": 8},
-    "B006": {"start": "12:00", "end": "21:00", "hours": 8},
-    "B007": {"start": "13:00", "end": "22:00", "hours": 8},
-    "B008": {"start": "14:00", "end": "23:00", "hours": 8},
-    "B009": {"start": "15:00", "end": "00:00", "hours": 8},
-    "B010": {"start": "16:00", "end": "01:00", "hours": 8},
-    "B011": {"start": "17:00", "end": "02:00", "hours": 8},
-    "B012": {"start": "18:00", "end": "03:00", "hours": 8},
-    # 正職 10h (休2H)
-    "B101": {"start": "08:00", "end": "18:00", "hours": 10},
-    "B102": {"start": "09:00", "end": "19:00", "hours": 10},
-    "B103": {"start": "10:00", "end": "20:00", "hours": 10},
-    "B104": {"start": "11:00", "end": "21:00", "hours": 10},
-    "B105": {"start": "11:30", "end": "21:30", "hours": 10},
-    "B106": {"start": "12:00", "end": "22:00", "hours": 10},
-    "B107": {"start": "13:00", "end": "23:00", "hours": 10},
-    "B108": {"start": "14:00", "end": "00:00", "hours": 10},
-    "B109": {"start": "15:00", "end": "01:00", "hours": 10},
-    # 兼職
-    "C002": {"start": "10:00", "end": "17:00", "hours": 6},
-    "C005": {"start": "11:00", "end": "21:00", "hours": 8},
-    "C007": {"start": "12:00", "end": "22:00", "hours": 8},
-    "C101": {"start": "15:00", "end": "00:00", "hours": 8},
-    "C102": {"start": "16:00", "end": "23:00", "hours": 6.5},
-    "C104": {"start": "16:00", "end": "02:00", "hours": 8},
-    "C105": {"start": "17:00", "end": "23:00", "hours": 5.5},
-    "C106": {"start": "18:00", "end": "22:00", "hours": 4},
-    "C107": {"start": "19:00", "end": "23:00", "hours": 4},
-    "C108": {"start": "20:00", "end": "00:00", "hours": 4},
-    "C109": {"start": "10:00", "end": "14:00", "hours": 4},
-    "C110": {"start": "10:00", "end": "14:00", "hours": 3.5},
-    "C111": {"start": "14:00", "end": "23:00", "hours": 8},
-    "C112": {"start": "16:00", "end": "01:00", "hours": 8},
-    "C113": {"start": "19:00", "end": "01:00", "hours": 5.5},
-    # 櫃台 (split into early/late)
-    "櫃台(早)": {"start": "10:00", "end": "21:00", "hours": 8},
-    "櫃台(晚)": {"start": "15:00", "end": "01:00", "hours": 8},
-}
-
-MIN_REST_HOURS = 11
-MAX_WEEKLY_HOURS = 46
-STD_WEEKLY_HOURS = 40
 DAYS_TW = ["週一", "週二", "週三", "週四", "週五", "週六", "週日"]
-
-TW_HOLIDAYS_2026 = {
-    "2026-01-01", "2026-01-26", "2026-01-27", "2026-01-28", "2026-01-29",
-    "2026-01-30", "2026-01-31", "2026-02-01", "2026-02-28", "2026-04-04",
-    "2026-04-05", "2026-05-01", "2026-06-19", "2026-09-29", "2026-10-10",
-}
 
 # ─── Scenario Detection ───────────────────────────────────────────────────────
 
-def is_holiday(date_str: str) -> bool:
+def is_holiday(date_str: str, holidays: set = None) -> bool:
+    """Check if a date is a holiday (weekend or in the holidays set).
+    Args:
+        date_str: Date in 'YYYY-MM-DD' format.
+        holidays: Set of holiday date strings. If None, uses empty set.
+    """
     try:
         d = datetime.strptime(date_str, "%Y-%m-%d")
-        return d.weekday() >= 5 or date_str in TW_HOLIDAYS_2026
+        return d.weekday() >= 5 or date_str in (holidays or set())
     except ValueError:
         return False
 
@@ -127,8 +83,8 @@ def load_package_dates(tenant_dir: str) -> set:
     return pkg
 
 
-def get_scenario(date_str: str, package_dates: set) -> str:
-    hol = is_holiday(date_str)
+def get_scenario(date_str: str, package_dates: set, holidays: set = None) -> str:
+    hol = is_holiday(date_str, holidays)
     pkg = date_str in package_dates
     if hol and pkg:  return "週末包場"
     if hol:          return "週末"
@@ -282,27 +238,26 @@ def get_day_requirements(scenario: str, demand_profile: dict) -> list:
 
 # ─── Workstation Role Helper ──────────────────────────────────────────────────
 
-WORKSTATION_ROLE_MAP = {
-    **{f"B{n:03d}": "烤手" for n in range(1, 13)},
-    **{f"B1{n:02d}": "烤手" for n in range(1, 10)},
-    "櫃台(早)": "領檯早",
-    "櫃台(晚)": "領檯晚",
-}
-
-
-def shift_code_to_role(shift_code: str) -> str:
-    """Map a shift code to its workstation role (烤手 / 領檯早 / 領檯晚)."""
-    return WORKSTATION_ROLE_MAP.get(shift_code, "烤手")
+def shift_code_to_role(shift_code: str, workstation_roles: dict = None) -> str:
+    """Map a shift code to its workstation role using tenant config.
+    Args:
+        shift_code: e.g. 'B103', '櫃台(早)'
+        workstation_roles: Mapping from tenant_config.json. Falls back to '烤手'.
+    """
+    if workstation_roles:
+        return workstation_roles.get(shift_code, "烤手")
+    return "烤手"
 
 
 # ─── Employee Skill Matching ──────────────────────────────────────────────────
 
-def employee_can_do_shift(habit: Habit, shift_code: str, role: str) -> bool:
+def employee_can_do_shift(habit: Habit, shift_code: str, role: str,
+                          workstation_roles: dict = None) -> bool:
     """
     Check if an employee can be assigned to a given shift code.
-    Uses skill-based matching: 烤手 / 領檯早 / 領檯晚.
+    Uses skill-based matching via workstation_roles from tenant config.
     """
-    role_needed = shift_code_to_role(shift_code)
+    role_needed = shift_code_to_role(shift_code, workstation_roles)
     skills = set(habit.workstation_skills)
 
     if not skills:
@@ -341,15 +296,29 @@ class DemandScheduleSolver:
                  enforce_preferences: bool = True,
                  rest_days: dict = None, manager_config: dict = None,
                  min_daily_headcount: dict = None,
-                 prev_tail: dict = None):
+                 prev_tail: dict = None,
+                 tenant_config=None):
         self.habits = habits
         self.demand_profile = demand_profile
         self.package_dates = package_dates or set()
         self.enforce_preferences = enforce_preferences
         self.rest_days = rest_days or {}
         self.manager_config = manager_config or {}
-        self.min_daily_headcount = min_daily_headcount  # {"weekday": 18, "weekend": 22}
+        self.min_daily_headcount = min_daily_headcount  # from tenant_config.min_daily_headcount
         self.prev_tail = prev_tail or {}
+
+        # Tenant config — provides shift_defs, workstation_roles, constraints, holidays
+        self.tenant_config = tenant_config
+        if tenant_config:
+            self.shift_defs = tenant_config.shift_defs
+            self.workstation_roles = tenant_config.workstation_roles
+            self.max_weekly_hours = tenant_config.constraints.get("max_weekly_hours", 46)
+            self.holidays = tenant_config.region_holidays
+        else:
+            self.shift_defs = SHIFT_DEFS  # fallback to module-level (deprecated)
+            self.workstation_roles = {}
+            self.max_weekly_hours = 46
+            self.holidays = set()
 
         self.week_start = datetime.strptime(week_start_date, "%Y-%m-%d")
         self.num_days = 7
@@ -370,7 +339,7 @@ class DemandScheduleSolver:
         self.day_requirements = []  # list of {shift_code, role, required}
         for d in range(self.num_days):
             date_str = self._date_for_day(d)
-            scen = get_scenario(date_str, self.package_dates)
+            scen = get_scenario(date_str, self.package_dates, self.holidays)
             self.day_scenarios.append(scen)
             self.day_requirements.append(get_day_requirements(scen, demand_profile))
 
@@ -382,13 +351,13 @@ class DemandScheduleSolver:
         return d.strftime("%Y-%m-%d")
 
     def _shift_start_hour(self, shift_code: str) -> int:
-        defn = SHIFT_DEFS.get(shift_code)
+        defn = self.shift_defs.get(shift_code)
         if defn:
             return int(defn["start"].split(":")[0])
         return 12  # default midday
 
     def _shift_hours(self, shift_code: str) -> float:
-        defn = SHIFT_DEFS.get(shift_code)
+        defn = self.shift_defs.get(shift_code)
         return defn["hours"] if defn else 8.0
 
     def _is_late_shift(self, shift_code: str) -> bool:
@@ -480,13 +449,13 @@ class DemandScheduleSolver:
                 for d in range(self.num_days)
                 for i, sc in enumerate(self.shift_codes)
             )
-            self.model.Add(weekly_hours_x10 <= int(MAX_WEEKLY_HOURS * 10))
+            self.model.Add(weekly_hours_x10 <= int(self.max_weekly_hours * 10))
 
         # HC5: Skill match
         for e, habit in enumerate(self.habits):
             for i, sc in enumerate(self.shift_codes):
-                role = WORKSTATION_ROLE_MAP.get(sc, "烤手")
-                if not employee_can_do_shift(habit, sc, role):
+                role = shift_code_to_role(sc, self.workstation_roles)
+                if not employee_can_do_shift(habit, sc, role, self.workstation_roles):
                     for d in range(self.num_days):
                         self.model.Add(self.vars[e][d][i] == 0)
 
@@ -580,7 +549,7 @@ class DemandScheduleSolver:
 
             if dt.weekday() == 5:  # Saturday
                 required = saturday_min
-            elif dt.weekday() == 6 or date_str in TW_HOLIDAYS_2026:  # Sunday / holiday
+            elif dt.weekday() == 6 or date_str in self.holidays:  # Sunday / holiday
                 required = sunday_min
             elif is_pkg:
                 required = max(weekday_min, package_min)
@@ -938,8 +907,8 @@ class DemandScheduleSolver:
             for d in range(self.num_days):
                 for i, sc in enumerate(self.shift_codes):
                     if solver.Value(self.vars[e][d][i]) == 1:
-                        defn = SHIFT_DEFS.get(sc, {})
-                        role = WORKSTATION_ROLE_MAP.get(sc, "烤手")
+                        defn = self.shift_defs.get(sc, {})
+                        role = shift_code_to_role(sc, self.workstation_roles)
                         entry = ScheduleEntry(
                             date=self._date_for_day(d),
                             day_of_week=DAYS_TW[d],
@@ -1033,6 +1002,12 @@ def run_scheduler(habits_path: str, demand_path: str,
     print("📅 排班求解器 (Demand-Aware Scheduler)")
     print("=" * 60)
 
+    # Load tenant config (single source of truth for all tenant-specific settings)
+    tenant_config = None
+    if tenant_dir:
+        tenant_config = load_tenant_config(tenant_dir)
+        print(f"🏪 租戶: {tenant_config.display_name} ({tenant_config.tenant_id})")
+
     # Load habits
     habits = load_habits_json(habits_path)
     print(f"📂 載入 {len(habits)} 位員工習慣資料")
@@ -1073,6 +1048,10 @@ def run_scheduler(habits_path: str, demand_path: str,
     if prev_tail:
         print(f"📎 前週班表: 載入 {len(prev_tail)} 位員工跨週資料")
 
+    # min_daily_headcount from tenant config, fallback to defaults
+    min_daily_hc = (tenant_config.min_daily_headcount if tenant_config
+                    else {"weekday": 0, "saturday": 0, "sunday": 0, "package": 0})
+
     solver = DemandScheduleSolver(
         habits=habits,
         demand_profile=demand_profile,
@@ -1080,8 +1059,9 @@ def run_scheduler(habits_path: str, demand_path: str,
         package_dates=package_dates,
         rest_days=rest_days,
         manager_config=manager_config,
-        min_daily_headcount={"weekday": 18, "saturday": 23, "sunday": 22, "package": 19},
+        min_daily_headcount=min_daily_hc,
         prev_tail=prev_tail,
+        tenant_config=tenant_config,
     )
 
     print(f"\n🔧 開始求解...")
@@ -1128,8 +1108,7 @@ if __name__ == "__main__":
     if len(sys.argv) < 3:
         print("用法: python ortools_solver.py <habits.json> <demand_shift.json> [輸出前綴] [週起始] [tenant目錄] [前週班表]")
         print("範例:")
-        print("  python ortools_solver.py habits.json habits_demand_shift.json schedule 2026-03-02 tenants/glod-pig")
-        print("  python ortools_solver.py habits.json habits_demand_shift.json schedule_0309 2026-03-09 tenants/glod-pig schedule_0302.csv")
+        print("  python ortools_solver.py tenants/glod-pig/output/habits.json tenants/glod-pig/output/habits_demand_shift.json schedule_0302 2026-03-02 tenants/glod-pig")
         sys.exit(1)
 
     habits_path        = sys.argv[1]
@@ -1138,6 +1117,13 @@ if __name__ == "__main__":
     week_start         = sys.argv[4] if len(sys.argv) > 4 else None
     tenant_dir         = sys.argv[5] if len(sys.argv) > 5 else None
     prev_schedule_path = sys.argv[6] if len(sys.argv) > 6 else None
+
+    # Auto-resolve output prefix to tenant output dir
+    if tenant_dir and output_prefix == "schedule":
+        out_dir = os.path.join(tenant_dir, "output")
+        os.makedirs(out_dir, exist_ok=True)
+        tag = week_start.replace("-", "")[4:] if week_start else "auto"
+        output_prefix = os.path.join(out_dir, f"schedule_{tag}")
 
     run_scheduler(habits_path, demand_path, output_prefix, week_start, tenant_dir,
                   prev_schedule_path=prev_schedule_path)

@@ -7,18 +7,7 @@ from collections import defaultdict, Counter
 from datetime import datetime
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__)))
-
-WORKSTATION_ROLE_MAP = {
-    **{f"B{n:03d}": "烤手" for n in range(1, 13)},
-    **{f"B1{n:02d}": "烤手" for n in range(1, 10)},
-    "櫃台(早)": "領檯早",
-    "櫃台(晚)": "領檯晚",
-}
-TW_HOLIDAYS = {
-    "2026-01-01","2026-01-26","2026-01-27","2026-01-28","2026-01-29",
-    "2026-01-30","2026-01-31","2026-02-01","2026-02-28","2026-04-04",
-    "2026-04-05","2026-05-01","2026-06-19","2026-09-29","2026-10-10",
-}
+from data_loader import load_tenant_config
 
 
 def load_package_dates(tenant_dir: str) -> set:
@@ -72,19 +61,19 @@ def load_package_dates(tenant_dir: str) -> set:
     return pkg
 
 
-def is_holiday(short_date: str) -> bool:
+def is_holiday(short_date: str, holidays: set = None) -> bool:
     try:
         m, d = map(int, short_date.split("-"))
         year = 2026 if m <= 6 else 2025
         full = f"{year}-{m:02d}-{d:02d}"
         dt = datetime.strptime(full, "%Y-%m-%d")
-        return dt.weekday() >= 5 or full in TW_HOLIDAYS
+        return dt.weekday() >= 5 or full in (holidays or set())
     except Exception:
         return False
 
 
-def get_scenario(short_date: str, package_dates: set) -> str:
-    hol = is_holiday(short_date)
+def get_scenario(short_date: str, package_dates: set, holidays: set = None) -> str:
+    hol = is_holiday(short_date, holidays)
     pkg = short_date in package_dates
     if hol and pkg:  return "週末包場"
     if hol:          return "週末"
@@ -106,6 +95,11 @@ def get_date_cols(path: str) -> dict:
 def run(tenant_dir: str, output_path: str = "habits_demand_shift.json"):
     from data_loader import parse_roster_csv
 
+    # Load tenant config for workstation_roles, scenarios, and holidays
+    tenant_config = load_tenant_config(tenant_dir)
+    workstation_roles = tenant_config.workstation_roles
+    holidays = tenant_config.region_holidays
+
     package_dates = load_package_dates(tenant_dir)
     roster_files = sorted([
         os.path.join(tenant_dir, f)
@@ -121,7 +115,7 @@ def run(tenant_dir: str, output_path: str = "habits_demand_shift.json"):
         # Get date → scenario mapping for this file
         date_col_map = get_date_cols(path)  # short_date → col_idx (unused here)
         all_dates.update(date_col_map.keys())
-        date_scenarios = {d: get_scenario(d, package_dates) for d in date_col_map}
+        date_scenarios = {d: get_scenario(d, package_dates, holidays) for d in date_col_map}
 
         employees = parse_roster_csv(path)
         for emp in employees:
@@ -129,17 +123,18 @@ def run(tenant_dir: str, output_path: str = "habits_demand_shift.json"):
                 if s.leave_type or not s.start_time or not s.workstation:
                     continue
                 scen = date_scenarios.get(s.date, "平日")
-                role = WORKSTATION_ROLE_MAP.get(s.workstation, "烤手")
+                role = workstation_roles.get(s.workstation, "烤手")
                 matrix[scen][role][s.workstation] += 1
 
     # 計算每個情境的天數
     scenario_days = defaultdict(int)
     for d in all_dates:
-        scen = get_scenario(d, package_dates)
+        scen = get_scenario(d, package_dates, holidays)
         scenario_days[scen] += 1
 
-    SCENARIOS = ["平日", "平日包場", "週末", "週末包場"]
-    ROLES = ["烤手", "領檯早", "領檯晚"]
+    SCENARIOS = tenant_config.scenarios
+    # Derive unique roles from workstation_roles values
+    ROLES = list(dict.fromkeys(workstation_roles.values()))
 
     result = {}
     SEP = "=" * 58
@@ -170,5 +165,10 @@ def run(tenant_dir: str, output_path: str = "habits_demand_shift.json"):
 
 if __name__ == "__main__":
     tenant = sys.argv[1] if len(sys.argv) > 1 else "tenants/glod-pig"
-    out = sys.argv[2] if len(sys.argv) > 2 else "habits_demand_shift.json"
+    if len(sys.argv) > 2:
+        out = sys.argv[2]
+    else:
+        out_dir = os.path.join(tenant, "output")
+        os.makedirs(out_dir, exist_ok=True)
+        out = os.path.join(out_dir, "habits_demand_shift.json")
     run(tenant, out)
