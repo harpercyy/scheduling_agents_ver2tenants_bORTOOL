@@ -108,7 +108,10 @@ class TenantConfig:
     csv_parser: str = "generic"
     csv_code_aliases: dict = field(default_factory=dict)  # {csv_code: [shift_defs_code, ...]}
     min_role_per_day: dict = field(default_factory=dict)  # {role: min_count} per day
+    manager_constraints: dict = field(default_factory=dict)  # from tenant_config.json
+    no_same_rest: list = field(default_factory=list)  # [[id_a, id_b], ...] from tenant_config.json
     region_holidays: set = field(default_factory=set)  # populated by load_tenant_config
+    coverage_targets: dict = field(default_factory=dict)  # {time: {min, label}} for auditor
 
 
 def load_tenant_config(tenant_dir: str) -> TenantConfig:
@@ -123,7 +126,8 @@ def load_tenant_config(tenant_dir: str) -> TenantConfig:
     # Strip doc comments (keys starting with _doc)
     data = {k: v for k, v in data.items() if not k.startswith("_doc")}
     for key in ["shift_defs", "workstation_roles", "min_daily_headcount", "constraints",
-                 "min_role_per_day", "csv_code_aliases"]:
+                 "min_role_per_day", "csv_code_aliases", "coverage_targets",
+                 "manager_constraints"]:
         if isinstance(data.get(key), dict):
             data[key] = {k: v for k, v in data[key].items() if not k.startswith("_doc")}
 
@@ -134,7 +138,9 @@ def load_tenant_config(tenant_dir: str) -> TenantConfig:
 
     # Merge defaults for optional nested dicts
     default_constraints = {"min_rest_hours": 11, "max_weekly_hours": 46,
-                           "max_working_days": 5, "std_weekly_hours": 40}
+                           "max_working_days": 5, "std_weekly_hours": 40,
+                           "max_consecutive_working_days": 4,
+                           "no_overtime_max_shifts": 5, "pt_min_shift_hour": 17}
     constraints = {**default_constraints, **(data.get("constraints") or {})}
 
     default_headcount = {"weekday": 0, "saturday": 0, "sunday": 0, "package": 0}
@@ -146,8 +152,24 @@ def load_tenant_config(tenant_dir: str) -> TenantConfig:
     # Load min_role_per_day (optional, for per-role daily minimums)
     min_role_per_day = data.get("min_role_per_day") or {}
 
+    # Load coverage_targets (optional, for auditor time-slot checks)
+    coverage_targets = data.get("coverage_targets") or {}
+
     # Load csv_code_aliases (optional, for CSV → shift_defs expansion)
     csv_code_aliases = data.get("csv_code_aliases") or {}
+
+    # Load manager_constraints (optional, replaces old staff_roles.json _manager_group)
+    raw_mc = data.get("manager_constraints") or {}
+    manager_constraints = {k: v for k, v in raw_mc.items() if not k.startswith("_")}
+
+    # Load no_same_rest (optional, replaces old staff_roles.json _no_same_rest)
+    raw_nsr = data.get("no_same_rest", {})
+    if isinstance(raw_nsr, dict):
+        no_same_rest = raw_nsr.get("pairs", [])
+    elif isinstance(raw_nsr, list):
+        no_same_rest = raw_nsr
+    else:
+        no_same_rest = []
 
     config = TenantConfig(
         tenant_id=data["tenant_id"],
@@ -162,7 +184,10 @@ def load_tenant_config(tenant_dir: str) -> TenantConfig:
         csv_parser=data.get("csv_parser", "generic"),
         csv_code_aliases=csv_code_aliases,
         min_role_per_day=min_role_per_day,
+        manager_constraints=manager_constraints,
+        no_same_rest=no_same_rest,
         region_holidays=holidays,
+        coverage_targets=coverage_targets,
     )
 
     print(f"📋 租戶設定: {config.display_name} ({config.tenant_id})")
@@ -226,6 +251,7 @@ class Habit:
     rotation_flexibility: Optional[str] = None              # "full" / "morning_afternoon" / "none"
     workstation_skills: list = field(default_factory=list)  # ["B104", "B003", "櫃台"]
     employee_type: str = "ft"                               # "ft" (正職) or "pt" (兼職)
+    is_manager: bool = False                                # True if 幹部/主管 (parsed from RULES.md)
     avg_weekly_hours: float = 0.0
     avg_shifts_per_week: float = 0.0
 
@@ -694,44 +720,36 @@ def load_habits_json(input_path: str) -> list:
     return habits
 
 
-def merge_staff_roles(habits: list, tenant_dir: str):
+def load_manager_constraints(tenant_config: TenantConfig, habits: list = None) -> dict:
+    """Build manager config dict from TenantConfig + habits.
+
+    Returns a dict compatible with the old load_manager_config() interface:
+    {
+        "member_ids": [...],       # from habits where is_manager=True
+        "daily_early_count": 1,
+        "daily_late_count": 1,
+        "early_shifts": [...],
+        "late_shifts": [...],
+        "exclude_from_headcount": True,
+        "no_same_rest": [["4", "6"]]
+    }
     """
-    Load tenants/<name>/staff_roles.json (if exists) and override
-    workstation_skills for each employee listed in it.
+    mc = tenant_config.manager_constraints or {}
 
-    staff_roles.json format:
-      {
-        "_manager_group": { ... },          // metadata keys (start with '_')
-        "3":  { "_name": "史曜誠 (Money)", "skills": ["烤手", "櫃台"] },
-        "5":  { "_name": "吳亭穎 (Ting)",  "skills": ["烤手", "服務", "櫃台"] }
-      }
-    Keys starting with '_' are metadata and are skipped during merge.
-    Skills are ordered by priority (first = highest priority).
-    """
-    roles_path = os.path.join(tenant_dir, "staff_roles.json")
-    if not os.path.exists(roles_path):
-        return
+    # Derive member_ids from habits where is_manager=True
+    member_ids = []
+    if habits:
+        member_ids = [h.employee_id for h in habits if h.is_manager]
 
-    with open(roles_path, encoding="utf-8") as f:
-        staff_roles = json.load(f)
-
-    overridden = 0
-    pt_count = 0
-    for habit in habits:
-        entry = staff_roles.get(habit.employee_id)
-        if entry:
-            if isinstance(entry.get("skills"), list):
-                habit.workstation_skills = entry["skills"]
-                overridden += 1
-            # Read employee type: "ft" (正職, default) or "pt" (兼職)
-            emp_type = entry.get("type", "ft")
-            if emp_type in ("ft", "pt"):
-                habit.employee_type = emp_type
-                if emp_type == "pt":
-                    pt_count += 1
-
-    print(f"   📋 staff_roles.json: 覆蓋 {overridden} 位員工技能"
-          + (f"，{pt_count} 位兼職 (PT)" if pt_count else ""))
+    return {
+        "member_ids": member_ids,
+        "daily_early_count": mc.get("daily_early_count", 0),
+        "daily_late_count": mc.get("daily_late_count", 0),
+        "early_shifts": mc.get("early_shifts", []),
+        "late_shifts": mc.get("late_shifts", []),
+        "exclude_from_headcount": mc.get("exclude_from_headcount", False),
+        "no_same_rest": tenant_config.no_same_rest or [],
+    }
 
 
 # ─── CLI ──────────────────────────────────────────────────────────────────────

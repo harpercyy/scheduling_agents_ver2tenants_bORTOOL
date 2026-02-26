@@ -28,12 +28,35 @@
     "package": 0
   },
 
+  "coverage_targets": {
+    "_doc": "按班次開始時間的最低人力需求（稽核用）。key 為班次開始時間，value 為 {min, label}。無需求則留空 {}。"
+  },
+
   "constraints": {
     "_doc": "勞動約束參數。未設定的欄位使用系統預設值。",
     "min_rest_hours": 11,
     "max_weekly_hours": 46,
     "max_working_days": 5,
-    "std_weekly_hours": 40
+    "std_weekly_hours": 40,
+    "max_consecutive_working_days": 4,
+    "no_overtime_max_shifts": 5,
+    "pt_min_shift_hour": 17
+  },
+
+  "manager_constraints": {
+    "_doc": "主管排班約束。若無主管制度可整段移除。daily_early/late_count = 每日最低主管人數。early/late_shifts = 主管可排班次代碼。hour_threshold 為無明確班次清單時的回退判斷。",
+    "daily_early_count": 0,
+    "daily_late_count": 0,
+    "early_shifts": [],
+    "late_shifts": [],
+    "exclude_from_headcount": false,
+    "early_hour_threshold": 12,
+    "late_hour_threshold": 14
+  },
+
+  "no_same_rest": {
+    "_doc": "禁止同日休假的員工配對 (employee_id)。無則留空。",
+    "pairs": []
   },
 
   "csv_parser": "generic"

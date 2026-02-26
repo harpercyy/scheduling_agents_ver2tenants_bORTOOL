@@ -27,11 +27,10 @@ schedule-agents/
 │
 └── tenants/                           ← 多租戶目錄（每店一個子資料夾）
     ├── TEMPLATE/                      ← 空白租戶範本（複製此目錄建立新租戶）
-    │   ├── tenant_config.json         ← 店面設定 schema（班次、角色、人力需求）
-    │   ├── staff_roles.json           ← 員工技能與主管設定
+    │   ├── tenant_config.json         ← 店面設定 schema（班次、角色、人力需求、主管約束、禁同休）
     │   ├── events.json                ← 包場 / 特殊事件日期
     │   ├── rest_days.json             ← 指定劃休
-    │   ├── RULES.md                   ← 店面商業規則（人類可讀）
+    │   ├── RULES.md                   ← 店面商業規則（Analyzer 解析幹部/領檯 + Claude 決策參考）
     │   └── output/                    ← 所有產出檔（自動建立）
     ├── glod-pig/                      ← 金豬 燒肉（現有租戶）
     └── nara/                          ← 奈良（待建立）
@@ -52,12 +51,15 @@ schedule-agents/
 | 每日最低人力 | `tenant_config.json → min_daily_headcount` | 平日 / 週六 / 週日 / 包場 各有不同門檻 |
 | 情境分類 | `tenant_config.json → scenarios` | 預設四種，可自訂 |
 | 假日表 | `tenant_config.json → region` | 依地區載入（TW / JP / ...） |
-| 約束參數 | `tenant_config.json → constraints` | 最低休息時數、每週上限工時、最大工作天數 |
+| 約束參數 | `tenant_config.json → constraints` | 最低休息時數、每週上限工時、最大工作天數、連續工作上限、不加班班次上限、兼職最早班次時間 |
+| 稽核覆蓋需求 | `tenant_config.json → coverage_targets` | 按時段最低人力需求（稽核用） |
 | CSV 解析器 | `tenant_config.json → csv_parser` | 不同店面可能有不同的班表匯出格式 |
-| 主管配置 | `staff_roles.json → _manager_group` | 主管名單、每日早晚班最低人數 |
+| 主管排班約束 | `tenant_config.json → manager_constraints` | 每日早晚班最低主管人數、主管可排班次 |
+| 禁同休配對 | `tenant_config.json → no_same_rest` | 不可同日休假的員工配對 |
+| 幹部/領檯指派 | `RULES.md`（Analyzer 自動解析） | 幹部名單 → `habits.json` 的 `is_manager`；領檯指派 → `workstation_skills` 覆蓋 |
 | 包場日期 | `events.json → package_dates` | 手動補充或從 CSV 營運備註自動偵測 |
 | 指定劃休 | `rest_days.json → designated_rest` | 員工指定休假日 |
-| 商業規則 | `RULES.md` | 人類可讀的排班規範（供 Claude 參考決策） |
+| 商業規則 | `RULES.md` | 人類可讀的排班規範（供 Claude 參考決策 + Analyzer 解析角色） |
 
 ### 2.2 tenant_config.json Schema
 
@@ -89,11 +91,34 @@ schedule-agents/
     "package": 19
   },
 
+  "coverage_targets": {
+    "10:00": {"min": 2, "label": "早班"},
+    "15:00": {"min": 2, "label": "午班"},
+    "19:00": {"min": 3, "label": "晚班"}
+  },
+
   "constraints": {
     "min_rest_hours": 11,
     "max_weekly_hours": 46,
     "max_working_days": 5,
-    "std_weekly_hours": 40
+    "std_weekly_hours": 40,
+    "max_consecutive_working_days": 4,
+    "no_overtime_max_shifts": 5,
+    "pt_min_shift_hour": 17
+  },
+
+  "manager_constraints": {
+    "daily_early_count": 1,
+    "daily_late_count": 1,
+    "early_shifts": ["B003", "B106", "B008"],
+    "late_shifts": ["B009", "B010"],
+    "exclude_from_headcount": true,
+    "early_hour_threshold": 12,
+    "late_hour_threshold": 14
+  },
+
+  "no_same_rest": {
+    "pairs": [["4", "6"]]
   },
 
   "csv_parser": "gold_pig_v1"
@@ -110,7 +135,10 @@ schedule-agents/
 | `workstation_roles` | ✅ | 班次代碼 → 崗位角色的對應表 |
 | `scenarios` | ⬚ | 情境名稱列表，預設 `["平日", "平日包場", "週末", "週末包場"]` |
 | `min_daily_headcount` | ⬚ | 各情境最低人力，預設全 0（不強制） |
-| `constraints` | ⬚ | 勞動約束覆寫，未設定則用預設值 |
+| `coverage_targets` | ⬚ | 按班次開始時間的最低人力需求（稽核用），`{ "HH:MM": { min, label } }`，無則省略 |
+| `constraints` | ⬚ | 勞動約束覆寫（含 `max_consecutive_working_days`、`no_overtime_max_shifts`、`pt_min_shift_hour`），未設定則用預設值 |
+| `manager_constraints` | ⬚ | 主管排班約束（含 `early_hour_threshold`、`late_hour_threshold` 回退判斷），無主管制度可省略 |
+| `no_same_rest` | ⬚ | 禁同休配對 `{ pairs: [[id_a, id_b], ...] }`，無則省略 |
 | `csv_parser` | ⬚ | CSV 解析器 ID，預設 `"generic"` |
 
 ---
@@ -142,7 +170,7 @@ WEEK=2026-03-02
 TENANT_DIR=tenants/$TENANT
 OUT=$TENANT_DIR/output
 
-# Step 1: Analyzer — 分析歷史班表
+# Step 1: Analyzer — 分析歷史班表 + 解析 RULES.md（產出 habits.json 含 is_manager）
 python scripts/analyzer.py $TENANT_DIR/ $OUT/habits.json
 
 # Step 2: Demand Analysis — 分析四情境需求分布
@@ -194,14 +222,13 @@ cp -r tenants/TEMPLATE tenants/<new-tenant>
 #    - 定義所有班次代碼 (shift_defs)
 #    - 定義角色對應 (workstation_roles)
 #    - 設定每日人力需求 (min_daily_headcount)
+#    - 設定主管排班約束 (manager_constraints)，若有主管制度
+#    - 設定禁同休配對 (no_same_rest)，若有
 
-# 3. 編輯 staff_roles.json
-#    - 列出所有員工的技能
-#    - 定義 _manager_group（如有主管制度）
-#    - 定義 _no_same_rest（禁同休配對）
-
-# 4. 編輯 RULES.md
-#    - 寫下店面的排班商業規則（供 Claude 參考）
+# 3. 編輯 RULES.md
+#    - 列出幹部名單（Analyzer 會自動解析 → habits.json 的 is_manager）
+#    - 列出領檯早/晚班指派（Analyzer 會自動解析 → workstation_skills 覆蓋）
+#    - 寫下其他排班商業規則（供 Claude 參考決策）
 
 # 5. 放入歷史班表 CSV
 
@@ -237,8 +264,8 @@ data_loader.py ← 被所有腳本 import
    - 排班輸出：`output/schedule_<YYYYMMDD>_<TIMESTAMP>.csv` / `.json`
    - 稽核報告：`output/audit_<YYYYMMDD>_<TIMESTAMP>.json`
    - **不同週的排班和稽核檔並存**（以 `<YYYYMMDD>` 區分）
-3. **tenant_config.json 是 single source of truth**，scripts 透過它取得所有店面設定
-4. **RULES.md 是給 Claude 的決策參考**，不直接被腳本解析，但 Claude 在做排班決策或回答問題時應讀取
+3. **tenant_config.json 是 single source of truth**，scripts 透過它取得所有店面設定（含 `manager_constraints`、`no_same_rest`）
+4. **RULES.md 同時是 Analyzer 的輸入和 Claude 的決策參考**：Analyzer 會解析幹部名單和領檯指派（產出 `is_manager` 和 `workstation_skills`），其餘內容供 Claude 排班決策時讀取
 
 ---
 

@@ -78,11 +78,37 @@
     "領檯晚": 1
   },
 
+  "coverage_targets": {
+    "_doc": "按班次開始時間的最低人力需求（稽核用）",
+    "10:00": {"min": 2, "label": "早班"},
+    "15:00": {"min": 2, "label": "午班"},
+    "19:00": {"min": 3, "label": "晚班"}
+  },
+
   "constraints": {
     "min_rest_hours": 11,
     "max_weekly_hours": 46,
     "max_working_days": 5,
-    "std_weekly_hours": 40
+    "std_weekly_hours": 40,
+    "max_consecutive_working_days": 4,
+    "no_overtime_max_shifts": 5,
+    "pt_min_shift_hour": 17
+  },
+
+  "manager_constraints": {
+    "_doc": "主管排班約束：每日早晚班最低主管人數、主管可排班次、是否計入總人數",
+    "daily_early_count": 1,
+    "daily_late_count": 1,
+    "early_shifts": ["B003", "B106", "B008"],
+    "late_shifts": ["B009", "B010"],
+    "exclude_from_headcount": true,
+    "early_hour_threshold": 12,
+    "late_hour_threshold": 14
+  },
+
+  "no_same_rest": {
+    "_doc": "禁止同日休假的員工配對 (employee_id)。參考 RULES.md §3 禁休規則。",
+    "pairs": [["4", "6"]]
   },
 
   "csv_parser": "gold_pig_v1",

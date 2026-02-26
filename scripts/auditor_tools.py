@@ -20,8 +20,9 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from data_loader import load_habits_json, WORKSTATION_CODES, load_tenant_config
-from ortools_solver import is_holiday, load_rest_days, load_manager_config
+from data_loader import (load_habits_json, WORKSTATION_CODES, load_tenant_config,
+                         load_manager_constraints)
+from ortools_solver import is_holiday, load_rest_days
 
 
 # ─── Violation Model ─────────────────────────────────────────────────────────
@@ -302,11 +303,9 @@ def check_p1_tenant_rules(entries: list, coverage_targets: dict = None,
     violations = []
 
     if not coverage_targets:
-        coverage_targets = {
-            "10:00": {"min": 2, "label": "早班"},
-            "15:00": {"min": 2, "label": "午班"},
-            "19:00": {"min": 3, "label": "晚班"},
-        }
+        coverage_targets = tenant_config.coverage_targets if tenant_config else {}
+    if not coverage_targets:
+        return violations  # No coverage_targets configured; skip this check
 
     by_date_shift = group_by_date_shift(entries)
 
@@ -393,25 +392,26 @@ def check_p1_tenant_rules(entries: list, coverage_targets: dict = None,
         # Early/late shifts from config, fallback to hour-based threshold
         early_codes = set(manager_config.get("early_shifts", []))
         late_codes = set(manager_config.get("late_shifts", []))
+        early_threshold = manager_config.get("early_hour_threshold", 12)
+        late_threshold = manager_config.get("late_hour_threshold", 14)
 
         # Group manager entries by date
         by_date = defaultdict(lambda: {"early": 0, "late": 0})
         for e in entries:
             if e.get("employee_id") in mgr_ids and not e.get("leave_type"):
                 ws = e.get("workstation", "")
-                if ws.startswith("B"):
-                    if early_codes:
-                        if ws in early_codes:
-                            by_date[e["date"]]["early"] += 1
-                    else:
-                        if _shift_start_hour(ws) <= 12:
-                            by_date[e["date"]]["early"] += 1
-                    if late_codes:
-                        if ws in late_codes:
-                            by_date[e["date"]]["late"] += 1
-                    else:
-                        if _shift_start_hour(ws) >= 14:
-                            by_date[e["date"]]["late"] += 1
+                if early_codes:
+                    if ws in early_codes:
+                        by_date[e["date"]]["early"] += 1
+                elif ws in shift_defs:
+                    if _shift_start_hour(ws) <= early_threshold:
+                        by_date[e["date"]]["early"] += 1
+                if late_codes:
+                    if ws in late_codes:
+                        by_date[e["date"]]["late"] += 1
+                elif ws in shift_defs:
+                    if _shift_start_hour(ws) >= late_threshold:
+                        by_date[e["date"]]["late"] += 1
 
         # Check all dates in schedule
         all_dates = sorted(set(e["date"] for e in entries))
@@ -491,7 +491,8 @@ def check_p1_tenant_rules(entries: list, coverage_targets: dict = None,
     return violations
 
 
-def check_p1_rhythm(grouped_by_emp: dict, current_week_start: str = None) -> list:
+def check_p1_rhythm(grouped_by_emp: dict, current_week_start: str = None,
+                    tenant_config=None) -> list:
     """
     P1-SC6 / P1-SC7 — Cross-week attendance rhythm checks.
     Accepts grouped_by_emp that may span multiple weeks (combined entries).
@@ -500,10 +501,12 @@ def check_p1_rhythm(grouped_by_emp: dict, current_week_start: str = None) -> lis
     with the current week (7 days from current_week_start), avoiding
     re-reporting issues that are entirely within a previous week.
 
-    P1-SC6: Consecutive >= 5 working days → one violation per streak
+    P1-SC6: Consecutive working days exceeding max → one violation per streak
     P1-SC7: Work-rest-work (做一休一) isolated rest day → one violation per occurrence
     """
     violations = []
+    constraints = tenant_config.constraints if tenant_config else {}
+    max_consec = constraints.get("max_consecutive_working_days", 4)
 
     # Determine current week date range for filtering
     curr_start = None
@@ -562,7 +565,7 @@ def check_p1_rhythm(grouped_by_emp: dict, current_week_start: str = None) -> lis
         # Boolean array: is this date a working day?
         is_working = [d in working_dates for d in date_range]
 
-        # P1-SC6: Detect consecutive >= 5 working days
+        # P1-SC6: Detect consecutive working days exceeding max_consec
         streak_start = None
         streak_len = 0
         for idx, w in enumerate(is_working):
@@ -571,7 +574,7 @@ def check_p1_rhythm(grouped_by_emp: dict, current_week_start: str = None) -> lis
                     streak_start = idx
                 streak_len += 1
             else:
-                if streak_len >= 5:
+                if streak_len > max_consec:
                     s_date = date_range[streak_start]
                     e_date = date_range[streak_start + streak_len - 1]
                     if _overlaps_current_week(s_date, e_date):
@@ -584,12 +587,12 @@ def check_p1_rhythm(grouped_by_emp: dict, current_week_start: str = None) -> lis
                             ),
                             employee_id=eid,
                             date=s_date,
-                            suggestion="避免連續工作超過 4 天，安排中間休息日",
+                            suggestion=f"避免連續工作超過 {max_consec} 天，安排中間休息日",
                         ))
                 streak_start = None
                 streak_len = 0
         # Check trailing streak
-        if streak_len >= 5:
+        if streak_len > max_consec:
             s_date = date_range[streak_start]
             e_date = date_range[streak_start + streak_len - 1]
             if _overlaps_current_week(s_date, e_date):
@@ -602,7 +605,7 @@ def check_p1_rhythm(grouped_by_emp: dict, current_week_start: str = None) -> lis
                     ),
                     employee_id=eid,
                     date=s_date,
-                    suggestion="避免連續工作超過 4 天，安排中間休息日",
+                    suggestion=f"避免連續工作超過 {max_consec} 天，安排中間休息日",
                 ))
 
         # P1-SC7: Detect work-rest-work (isolated rest day)
@@ -627,13 +630,17 @@ def check_p1_rhythm(grouped_by_emp: dict, current_week_start: str = None) -> lis
 
 # ─── P2: Employee Preferences ────────────────────────────────────────────────
 
-def check_p2_preferences(entries: list, habits_map: dict) -> list:
+def check_p2_preferences(entries: list, habits_map: dict,
+                         tenant_config=None) -> list:
     """
     P2 — Employee preference compliance.
     Soft violations: flag but do not block if necessary.
     """
     violations = []
     by_emp = group_by_employee(entries)
+    constraints = tenant_config.constraints if tenant_config else {}
+    no_ot_max = constraints.get("no_overtime_max_shifts", 5)
+    pt_min_hour = constraints.get("pt_min_shift_hour", 17)
 
     for eid, emp_entries in by_emp.items():
         habit = habits_map.get(eid)
@@ -663,12 +670,12 @@ def check_p2_preferences(entries: list, habits_map: dict) -> list:
 
         # P2-002: No-overtime employees assigned too many shifts
         if habit.overtime_willingness == "no_overtime":
-            if len(working) > 5:
+            if len(working) > no_ot_max:
                 violations.append(Violation(
                     priority="P2",
                     rule_id="P2-002",
                     description=(f"員工 {habit.chinese_name}({eid}) 不願加班，"
-                                 f"但本週被排 {len(working)} 個班次（超過 5）"),
+                                 f"但本週被排 {len(working)} 個班次（超過 {no_ot_max}）"),
                     employee_id=eid,
                     suggestion="減少此員工班次或改由加班意願較高的員工補充",
                 ))
@@ -683,7 +690,7 @@ def check_p2_preferences(entries: list, habits_map: dict) -> list:
                         start_hour = int(shift_start.split(":")[0])
                     except (ValueError, IndexError):
                         start_hour = 12
-                    if start_hour < 17:
+                    if start_hour < pt_min_hour:
                         violations.append(Violation(
                             priority="P2",
                             rule_id="P2-003",
@@ -736,9 +743,10 @@ def run_auditor(schedule_path: str, habits_path: str = None,
                            else {"weekday": 0, "saturday": 0, "sunday": 0, "package": 0})
 
     if tenant_dir:
-        # Load manager config
-        staff_roles_path = os.path.join(tenant_dir, "staff_roles.json")
-        manager_config = load_manager_config(staff_roles_path)
+        # Load manager constraints from tenant_config + habits.is_manager
+        if tenant_config:
+            habits_list = list(habits_map.values()) if habits_map else []
+            manager_config = load_manager_constraints(tenant_config, habits_list)
 
         # Load rest days — need week_start; infer from schedule if not provided
         if not week_start and entries:
@@ -788,9 +796,11 @@ def run_auditor(schedule_path: str, habits_path: str = None,
                                 tenant_config=tenant_config)
     all_violations.extend(p1)
     # P1-SC6/SC7: Use combined data for cross-week rhythm detection
-    p1_rhythm = check_p1_rhythm(combined_by_emp, current_week_start=week_start)
+    p1_rhythm = check_p1_rhythm(combined_by_emp, current_week_start=week_start,
+                                tenant_config=tenant_config)
     all_violations.extend(p1_rhythm)
-    p2 = check_p2_preferences(entries, habits_map) if habits_map else []
+    p2 = check_p2_preferences(entries, habits_map,
+                              tenant_config=tenant_config) if habits_map else []
     all_violations.extend(p2)
 
     # Summary

@@ -26,8 +26,9 @@ from datetime import datetime, timedelta
 from collections import defaultdict
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from data_loader import (Habit, ScheduleEntry, load_habits_json, merge_staff_roles,
-                          load_tenant_config, get_region_holidays)
+from data_loader import (Habit, ScheduleEntry, load_habits_json,
+                          load_tenant_config, load_manager_constraints,
+                          get_region_holidays)
 
 try:
     from ortools.sat.python import cp_model
@@ -124,19 +125,6 @@ def load_rest_days(path: str, week_start: str, num_days: int = 7) -> dict:
 
     return result
 
-
-def load_manager_config(staff_roles_path: str) -> dict:
-    """
-    Load _manager_group and _no_same_rest config from staff_roles.json.
-    Returns a dict with manager group settings and no_same_rest pairs.
-    """
-    if not staff_roles_path or not os.path.exists(staff_roles_path):
-        return {}
-    with open(staff_roles_path, encoding="utf-8") as f:
-        data = json.load(f)
-    config = data.get("_manager_group", {})
-    config["no_same_rest"] = data.get("_no_same_rest", [])
-    return config
 
 
 def load_prev_tail(prev_schedule_path: str, habits: list) -> dict:
@@ -480,18 +468,20 @@ class DemandScheduleSolver:
             # Early/late shifts from config, fallback to hour-based threshold
             early_codes = set(self.manager_config.get("early_shifts", []))
             late_codes = set(self.manager_config.get("late_shifts", []))
+            early_threshold = self.manager_config.get("early_hour_threshold", 12)
+            late_threshold = self.manager_config.get("late_hour_threshold", 14)
 
             if early_codes:
                 early_shift_indices = [i for i, sc in enumerate(self.shift_codes) if sc in early_codes]
             else:
                 early_shift_indices = [i for i, sc in enumerate(self.shift_codes)
-                                       if sc.startswith("B") and self._shift_start_hour(sc) <= 12]
+                                       if sc in self.shift_defs and self._shift_start_hour(sc) <= early_threshold]
 
             if late_codes:
                 late_shift_indices = [i for i, sc in enumerate(self.shift_codes) if sc in late_codes]
             else:
                 late_shift_indices = [i for i, sc in enumerate(self.shift_codes)
-                                      if sc.startswith("B") and self._shift_start_hour(sc) >= 14]
+                                      if sc in self.shift_defs and self._shift_start_hour(sc) >= late_threshold]
 
             if mgr_indices:
                 for d in range(self.num_days):
@@ -1080,14 +1070,12 @@ def run_scheduler(habits_path: str, demand_path: str,
     habits = load_habits_json(habits_path)
     print(f"📂 載入 {len(habits)} 位員工習慣資料")
 
-    # Load staff_roles to override skills (critical for correct skill matching)
+    # Load manager constraints from tenant_config + habits.is_manager
     manager_config = {}
-    if tenant_dir:
-        merge_staff_roles(habits, tenant_dir)
-        staff_roles_path = os.path.join(tenant_dir, "staff_roles.json")
-        manager_config = load_manager_config(staff_roles_path)
-        if manager_config:
-            print(f"👔 主管設定: {manager_config.get('member_ids', [])}")
+    if tenant_config:
+        manager_config = load_manager_constraints(tenant_config, habits)
+        if manager_config.get("member_ids"):
+            print(f"👔 主管設定: {manager_config['member_ids']}")
 
     # Load demand profile
     demand_profile = load_demand_profile(demand_path)
