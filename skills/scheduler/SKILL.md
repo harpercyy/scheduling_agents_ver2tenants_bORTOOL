@@ -41,8 +41,9 @@ The Scheduler uses Google OR-Tools **CP-SAT** to generate a weekly roster that:
 | `workstation_roles` | `tenant_config.json` | Maps shift codes to roles |
 | `min_daily_headcount` | `tenant_config.json` | Minimum staffing per day type |
 | `constraints` | `tenant_config.json` | min_rest_hours, max_weekly_hours, max_working_days |
-| `_manager_group` | `staff_roles.json` | Manager coverage requirements |
-| `_no_same_rest` | `staff_roles.json` | Pairs that cannot rest on same day |
+| `manager_constraints` | `tenant_config.json` | Manager coverage requirements (early/late shifts, daily counts) |
+| `no_same_rest` | `tenant_config.json` | Pairs that cannot rest on same day |
+| `is_manager` | `habits.json` (per employee) | Identifies which employees are managers |
 | `package_dates` | `events.json` | Private event dates (affects scenario detection) |
 | `designated_rest` | `rest_days.json` | Employee-designated rest days |
 
@@ -183,6 +184,6 @@ python scripts/auditor_tools.py schedule_0302.csv habits.json audit_0302.json te
 | Max weekly hours | From `tenant_config.json → constraints.max_weekly_hours` |
 | Skill match (workstation_skills) | Always enforced |
 | Designated rest days | Always enforced (labor law) |
-| Manager coverage | From `staff_roles.json → _manager_group` |
-| No-same-rest pairs | From `staff_roles.json → _no_same_rest` |
+| Manager coverage | From `tenant_config.json → manager_constraints` + `habits.json → is_manager` |
+| No-same-rest pairs | From `tenant_config.json → no_same_rest` |
 | Demand minimum per shift code | Always enforced (relaxed to 1 at Level 2) |

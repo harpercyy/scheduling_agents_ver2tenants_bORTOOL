@@ -43,8 +43,9 @@ The Auditor validates a schedule against four priority layers:
 | `min_daily_headcount` | `tenant_config.json` | P1: daily staffing minimum targets |
 | `constraints` | `tenant_config.json` | P0: max hours, min rest, etc. |
 | `shift_defs` | `tenant_config.json` | P0: hours calculation for shift codes |
-| `_manager_group` | `staff_roles.json` | P1: manager early/late coverage |
-| `_no_same_rest` | `staff_roles.json` | P1: forbidden same-day rest pairs |
+| `manager_constraints` | `tenant_config.json` | P1: manager early/late coverage |
+| `no_same_rest` | `tenant_config.json` | P1: forbidden same-day rest pairs |
+| `is_manager` | `habits.json` (per employee) | Identifies managers for coverage checks |
 | `designated_rest` | `rest_days.json` | P0: must not schedule on rest days |
 
 ---
@@ -161,8 +162,8 @@ python scripts/auditor_tools.py schedule.csv habits.json audit_report.json tenan
 |---------|-------------|---------------|
 | P1-001 | Shift-level staffing minimum | Coverage targets |
 | P1-002 | Daily total headcount minimum | `tenant_config.json → min_daily_headcount` |
-| P1-003 | Manager early/late coverage | `staff_roles.json → _manager_group` |
-| P1-004 | No-same-rest pair violation | `staff_roles.json → _no_same_rest` |
+| P1-003 | Manager early/late coverage | `tenant_config.json → manager_constraints` + `habits.json → is_manager` |
+| P1-004 | No-same-rest pair violation | `tenant_config.json → no_same_rest` |
 | P1-SC6 | No 5+ consecutive working days | Cross-week detection via `prev_schedule` |
 | P1-SC7 | No work-rest-work pattern | Cross-week detection via `prev_schedule` |
 

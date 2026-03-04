@@ -1,25 +1,65 @@
 {
-  "generated_at": "2026-02-25T19:10:58.261756",
-  "schedule_path": "tenants/glod-pig/output/schedule_20260302.csv",
+  "generated_at": "2026-03-03T19:47:18.538824",
+  "schedule_path": "tenants/glod-pig/output/schedule_20260302_20260303_194607.csv",
   "overall_pass": false,
-  "total_violations": 22,
+  "total_violations": 32,
   "summary": {
-    "P1": 1,
-    "P2": 21
+    "P1": 6,
+    "P2": 26
   },
   "violations": [
     {
       "priority": "P1",
       "rule_id": "P1-SC7",
-      "description": "員工 15 在 2026-03-03 出現做一休一（2026-03-02 上班 → 2026-03-03 休 → 2026-03-04 上班）",
-      "employee_id": "15",
-      "date": "2026-03-03",
+      "description": "員工 19 在 2026-03-07 出現做一休一（2026-03-06 上班 → 2026-03-07 休 → 2026-03-08 上班）",
+      "employee_id": "19",
+      "date": "2026-03-07",
+      "suggestion": "將相鄰的休息日合併，避免孤立休假"
+    },
+    {
+      "priority": "P1",
+      "rule_id": "P1-SC7",
+      "description": "員工 20 在 2026-03-06 出現做一休一（2026-03-05 上班 → 2026-03-06 休 → 2026-03-07 上班）",
+      "employee_id": "20",
+      "date": "2026-03-06",
+      "suggestion": "將相鄰的休息日合併，避免孤立休假"
+    },
+    {
+      "priority": "P1",
+      "rule_id": "P1-SC7",
+      "description": "員工 25 在 2026-03-05 出現做一休一（2026-03-04 上班 → 2026-03-05 休 → 2026-03-06 上班）",
+      "employee_id": "25",
+      "date": "2026-03-05",
+      "suggestion": "將相鄰的休息日合併，避免孤立休假"
+    },
+    {
+      "priority": "P1",
+      "rule_id": "P1-SC7",
+      "description": "員工 26 在 2026-03-04 出現做一休一（2026-03-03 上班 → 2026-03-04 休 → 2026-03-05 上班）",
+      "employee_id": "26",
+      "date": "2026-03-04",
+      "suggestion": "將相鄰的休息日合併，避免孤立休假"
+    },
+    {
+      "priority": "P1",
+      "rule_id": "P1-SC7",
+      "description": "員工 29 在 2026-03-05 出現做一休一（2026-03-04 上班 → 2026-03-05 休 → 2026-03-06 上班）",
+      "employee_id": "29",
+      "date": "2026-03-05",
+      "suggestion": "將相鄰的休息日合併，避免孤立休假"
+    },
+    {
+      "priority": "P1",
+      "rule_id": "P1-SC7",
+      "description": "員工 30 在 2026-03-06 出現做一休一（2026-03-05 上班 → 2026-03-06 休 → 2026-03-07 上班）",
+      "employee_id": "30",
+      "date": "2026-03-06",
       "suggestion": "將相鄰的休息日合併，避免孤立休假"
     },
     {
       "priority": "P2",
       "rule_id": "P2-001",
-      "description": "員工 林靜宜(1) 在 2026-03-02 被排入非偏好班次（偏好: B104，實際: B009）",
+      "description": "員工 林靜宜(1) 在 2026-03-02 被排入非偏好班次（偏好: B104，實際: B010）",
       "employee_id": "1",
       "date": "2026-03-02",
       "suggestion": "優先考慮將此員工排入 B104 班次"
@@ -27,162 +67,202 @@
     {
       "priority": "P2",
       "rule_id": "P2-001",
-      "description": "員工 林靜宜(1) 在 2026-03-03 被排入非偏好班次（偏好: B104，實際: B009）",
+      "description": "員工 林靜宜(1) 在 2026-03-05 被排入非偏好班次（偏好: B104，實際: B010）",
       "employee_id": "1",
-      "date": "2026-03-03",
-      "suggestion": "優先考慮將此員工排入 B104 班次"
-    },
-    {
-      "priority": "P2",
-      "rule_id": "P2-001",
-      "description": "員工 林靜宜(1) 在 2026-03-04 被排入非偏好班次（偏好: B104，實際: B010）",
-      "employee_id": "1",
-      "date": "2026-03-04",
-      "suggestion": "優先考慮將此員工排入 B104 班次"
-    },
-    {
-      "priority": "P2",
-      "rule_id": "P2-001",
-      "description": "員工 林靜宜(1) 在 2026-03-07 被排入非偏好班次（偏好: B104，實際: B010）",
-      "employee_id": "1",
-      "date": "2026-03-07",
-      "suggestion": "優先考慮將此員工排入 B104 班次"
-    },
-    {
-      "priority": "P2",
-      "rule_id": "P2-001",
-      "description": "員工 林靜宜(1) 在 2026-03-08 被排入非偏好班次（偏好: B104，實際: B009）",
-      "employee_id": "1",
-      "date": "2026-03-08",
-      "suggestion": "優先考慮將此員工排入 B104 班次"
-    },
-    {
-      "priority": "P2",
-      "rule_id": "P2-001",
-      "description": "員工 李基雨(2) 在 2026-03-02 被排入非偏好班次（偏好: afternoon, morning, evening，實際: 櫃台）",
-      "employee_id": "2",
-      "date": "2026-03-02",
-      "suggestion": "優先考慮將此員工排入 afternoon 班次"
-    },
-    {
-      "priority": "P2",
-      "rule_id": "P2-001",
-      "description": "員工 李基雨(2) 在 2026-03-05 被排入非偏好班次（偏好: afternoon, morning, evening，實際: 櫃台）",
-      "employee_id": "2",
       "date": "2026-03-05",
-      "suggestion": "優先考慮將此員工排入 afternoon 班次"
+      "suggestion": "優先考慮將此員工排入 B104 班次"
     },
     {
       "priority": "P2",
       "rule_id": "P2-001",
-      "description": "員工 李基雨(2) 在 2026-03-06 被排入非偏好班次（偏好: afternoon, morning, evening，實際: 櫃台）",
-      "employee_id": "2",
+      "description": "員工 林靜宜(1) 在 2026-03-06 被排入非偏好班次（偏好: B104，實際: B009）",
+      "employee_id": "1",
       "date": "2026-03-06",
-      "suggestion": "優先考慮將此員工排入 afternoon 班次"
+      "suggestion": "優先考慮將此員工排入 B104 班次"
     },
     {
       "priority": "P2",
       "rule_id": "P2-001",
-      "description": "員工 李基雨(2) 在 2026-03-07 被排入非偏好班次（偏好: afternoon, morning, evening，實際: 櫃台）",
+      "description": "員工 林靜宜(1) 在 2026-03-07 被排入非偏好班次（偏好: B104，實際: B009）",
+      "employee_id": "1",
+      "date": "2026-03-07",
+      "suggestion": "優先考慮將此員工排入 B104 班次"
+    },
+    {
+      "priority": "P2",
+      "rule_id": "P2-001",
+      "description": "員工 林靜宜(1) 在 2026-03-08 被排入非偏好班次（偏好: B104，實際: B010）",
+      "employee_id": "1",
+      "date": "2026-03-08",
+      "suggestion": "優先考慮將此員工排入 B104 班次"
+    },
+    {
+      "priority": "P2",
+      "rule_id": "P2-001",
+      "description": "員工 李基雨(2) 在 2026-03-02 被排入非偏好班次（偏好: B004，實際: B008）",
+      "employee_id": "2",
+      "date": "2026-03-02",
+      "suggestion": "優先考慮將此員工排入 B004 班次"
+    },
+    {
+      "priority": "P2",
+      "rule_id": "P2-001",
+      "description": "員工 李基雨(2) 在 2026-03-03 被排入非偏好班次（偏好: B004，實際: B008）",
+      "employee_id": "2",
+      "date": "2026-03-03",
+      "suggestion": "優先考慮將此員工排入 B004 班次"
+    },
+    {
+      "priority": "P2",
+      "rule_id": "P2-001",
+      "description": "員工 李基雨(2) 在 2026-03-04 被排入非偏好班次（偏好: B004，實際: B009）",
+      "employee_id": "2",
+      "date": "2026-03-04",
+      "suggestion": "優先考慮將此員工排入 B004 班次"
+    },
+    {
+      "priority": "P2",
+      "rule_id": "P2-001",
+      "description": "員工 李基雨(2) 在 2026-03-07 被排入非偏好班次（偏好: B004，實際: B008）",
       "employee_id": "2",
       "date": "2026-03-07",
-      "suggestion": "優先考慮將此員工排入 afternoon 班次"
+      "suggestion": "優先考慮將此員工排入 B004 班次"
     },
     {
       "priority": "P2",
       "rule_id": "P2-001",
-      "description": "員工 李基雨(2) 在 2026-03-08 被排入非偏好班次（偏好: afternoon, morning, evening，實際: 櫃台）",
+      "description": "員工 李基雨(2) 在 2026-03-08 被排入非偏好班次（偏好: B004，實際: B009）",
       "employee_id": "2",
       "date": "2026-03-08",
-      "suggestion": "優先考慮將此員工排入 afternoon 班次"
+      "suggestion": "優先考慮將此員工排入 B004 班次"
     },
     {
       "priority": "P2",
       "rule_id": "P2-001",
-      "description": "員工 黃妤婕(4) 在 2026-03-05 被排入非偏好班次（偏好: B003, B104，實際: B009）",
-      "employee_id": "4",
-      "date": "2026-03-05",
-      "suggestion": "優先考慮將此員工排入 B003 班次"
-    },
-    {
-      "priority": "P2",
-      "rule_id": "P2-001",
-      "description": "員工 吳亭穎(5) 在 2026-03-06 被排入非偏好班次（偏好: B106, B008，實際: B010）",
+      "description": "員工 吳亭穎(5) 在 2026-03-03 被排入非偏好班次（偏好: B106, B008，實際: B009）",
       "employee_id": "5",
+      "date": "2026-03-03",
+      "suggestion": "優先考慮將此員工排入 B106 班次"
+    },
+    {
+      "priority": "P2",
+      "rule_id": "P2-001",
+      "description": "員工 吳亭穎(5) 在 2026-03-04 被排入非偏好班次（偏好: B106, B008，實際: B009）",
+      "employee_id": "5",
+      "date": "2026-03-04",
+      "suggestion": "優先考慮將此員工排入 B106 班次"
+    },
+    {
+      "priority": "P2",
+      "rule_id": "P2-001",
+      "description": "員工 吳咨錞(8) 在 2026-03-05 被排入非偏好班次（偏好: B004, B103，實際: 櫃台(早)）",
+      "employee_id": "8",
+      "date": "2026-03-05",
+      "suggestion": "優先考慮將此員工排入 B004 班次"
+    },
+    {
+      "priority": "P2",
+      "rule_id": "P2-001",
+      "description": "員工 吳咨錞(8) 在 2026-03-06 被排入非偏好班次（偏好: B004, B103，實際: 櫃台(早)）",
+      "employee_id": "8",
+      "date": "2026-03-06",
+      "suggestion": "優先考慮將此員工排入 B004 班次"
+    },
+    {
+      "priority": "P2",
+      "rule_id": "P2-001",
+      "description": "員工 洪菀妤(9) 在 2026-03-02 被排入非偏好班次（偏好: B103，實際: 櫃台(早)）",
+      "employee_id": "9",
+      "date": "2026-03-02",
+      "suggestion": "優先考慮將此員工排入 B103 班次"
+    },
+    {
+      "priority": "P2",
+      "rule_id": "P2-001",
+      "description": "員工 洪菀妤(9) 在 2026-03-03 被排入非偏好班次（偏好: B103，實際: 櫃台(早)）",
+      "employee_id": "9",
+      "date": "2026-03-03",
+      "suggestion": "優先考慮將此員工排入 B103 班次"
+    },
+    {
+      "priority": "P2",
+      "rule_id": "P2-001",
+      "description": "員工 洪菀妤(9) 在 2026-03-04 被排入非偏好班次（偏好: B103，實際: 櫃台(早)）",
+      "employee_id": "9",
+      "date": "2026-03-04",
+      "suggestion": "優先考慮將此員工排入 B103 班次"
+    },
+    {
+      "priority": "P2",
+      "rule_id": "P2-001",
+      "description": "員工 洪菀妤(9) 在 2026-03-07 被排入非偏好班次（偏好: B103，實際: 櫃台(早)）",
+      "employee_id": "9",
+      "date": "2026-03-07",
+      "suggestion": "優先考慮將此員工排入 B103 班次"
+    },
+    {
+      "priority": "P2",
+      "rule_id": "P2-001",
+      "description": "員工 洪菀妤(9) 在 2026-03-08 被排入非偏好班次（偏好: B103，實際: 櫃台(早)）",
+      "employee_id": "9",
+      "date": "2026-03-08",
+      "suggestion": "優先考慮將此員工排入 B103 班次"
+    },
+    {
+      "priority": "P2",
+      "rule_id": "P2-001",
+      "description": "員工 趙翊蓁(25) 在 2026-03-03 被排入非偏好班次（偏好: B106, B009，實際: 櫃台(晚)）",
+      "employee_id": "25",
+      "date": "2026-03-03",
+      "suggestion": "優先考慮將此員工排入 B106 班次"
+    },
+    {
+      "priority": "P2",
+      "rule_id": "P2-001",
+      "description": "員工 趙翊蓁(25) 在 2026-03-04 被排入非偏好班次（偏好: B106, B009，實際: 櫃台(晚)）",
+      "employee_id": "25",
+      "date": "2026-03-04",
+      "suggestion": "優先考慮將此員工排入 B106 班次"
+    },
+    {
+      "priority": "P2",
+      "rule_id": "P2-001",
+      "description": "員工 趙翊蓁(25) 在 2026-03-06 被排入非偏好班次（偏好: B106, B009，實際: 櫃台(晚)）",
+      "employee_id": "25",
       "date": "2026-03-06",
       "suggestion": "優先考慮將此員工排入 B106 班次"
     },
     {
       "priority": "P2",
       "rule_id": "P2-001",
-      "description": "員工 范袁郡(6) 在 2026-03-03 被排入非偏好班次（偏好: B003，實際: 櫃台）",
-      "employee_id": "6",
-      "date": "2026-03-03",
-      "suggestion": "優先考慮將此員工排入 B003 班次"
-    },
-    {
-      "priority": "P2",
-      "rule_id": "P2-001",
-      "description": "員工 范袁郡(6) 在 2026-03-08 被排入非偏好班次（偏好: B003，實際: 櫃台）",
-      "employee_id": "6",
-      "date": "2026-03-08",
-      "suggestion": "優先考慮將此員工排入 B003 班次"
-    },
-    {
-      "priority": "P2",
-      "rule_id": "P2-001",
-      "description": "員工 王倩雯(7) 在 2026-03-04 被排入非偏好班次（偏好: B103，實際: 櫃台）",
-      "employee_id": "7",
-      "date": "2026-03-04",
-      "suggestion": "優先考慮將此員工排入 B103 班次"
-    },
-    {
-      "priority": "P2",
-      "rule_id": "P2-001",
-      "description": "員工 王倩雯(7) 在 2026-03-05 被排入非偏好班次（偏好: B103，實際: 櫃台）",
-      "employee_id": "7",
-      "date": "2026-03-05",
-      "suggestion": "優先考慮將此員工排入 B103 班次"
-    },
-    {
-      "priority": "P2",
-      "rule_id": "P2-001",
-      "description": "員工 洪菀妤(9) 在 2026-03-04 被排入非偏好班次（偏好: B103，實際: 櫃台）",
-      "employee_id": "9",
-      "date": "2026-03-04",
-      "suggestion": "優先考慮將此員工排入 B103 班次"
-    },
-    {
-      "priority": "P2",
-      "rule_id": "P2-001",
-      "description": "員工 洪菀妤(9) 在 2026-03-07 被排入非偏好班次（偏好: B103，實際: 櫃台）",
-      "employee_id": "9",
+      "description": "員工 趙翊蓁(25) 在 2026-03-07 被排入非偏好班次（偏好: B106, B009，實際: 櫃台(晚)）",
+      "employee_id": "25",
       "date": "2026-03-07",
-      "suggestion": "優先考慮將此員工排入 B103 班次"
+      "suggestion": "優先考慮將此員工排入 B106 班次"
     },
     {
       "priority": "P2",
       "rule_id": "P2-001",
-      "description": "員工 彭雅伶(37) 在 2026-03-02 被排入非偏好班次（偏好: B003，實際: 櫃台）",
-      "employee_id": "37",
+      "description": "員工 趙翊蓁(25) 在 2026-03-08 被排入非偏好班次（偏好: B106, B009，實際: 櫃台(晚)）",
+      "employee_id": "25",
+      "date": "2026-03-08",
+      "suggestion": "優先考慮將此員工排入 B106 班次"
+    },
+    {
+      "priority": "P2",
+      "rule_id": "P2-001",
+      "description": "員工 譚憶樺(26) 在 2026-03-02 被排入非偏好班次（偏好: B010, B009, B011，實際: 櫃台(晚)）",
+      "employee_id": "26",
       "date": "2026-03-02",
-      "suggestion": "優先考慮將此員工排入 B003 班次"
+      "suggestion": "優先考慮將此員工排入 B010 班次"
     },
     {
       "priority": "P2",
       "rule_id": "P2-001",
-      "description": "員工 彭雅伶(37) 在 2026-03-03 被排入非偏好班次（偏好: B003，實際: 櫃台）",
-      "employee_id": "37",
-      "date": "2026-03-03",
-      "suggestion": "優先考慮將此員工排入 B003 班次"
-    },
-    {
-      "priority": "P2",
-      "rule_id": "P2-001",
-      "description": "員工 彭雅伶(37) 在 2026-03-06 被排入非偏好班次（偏好: B003，實際: 櫃台）",
-      "employee_id": "37",
-      "date": "2026-03-06",
-      "suggestion": "優先考慮將此員工排入 B003 班次"
+      "description": "員工 譚憶樺(26) 在 2026-03-05 被排入非偏好班次（偏好: B010, B009, B011，實際: 櫃台(晚)）",
+      "employee_id": "26",
+      "date": "2026-03-05",
+      "suggestion": "優先考慮將此員工排入 B010 班次"
     }
   ]
 }

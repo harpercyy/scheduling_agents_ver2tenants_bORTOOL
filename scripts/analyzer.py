@@ -17,6 +17,7 @@ import re
 import sys
 import glob
 from collections import Counter, defaultdict
+from typing import Optional
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
@@ -26,7 +27,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from data_loader import (
     parse_roster_csv, Habit, EmployeePreference,
     habits_to_json, SHIFT_LABELS, LEAVE_TYPES,
-    merge_staff_roles, load_tenant_config,
+    load_tenant_config,
 )
 
 
@@ -43,7 +44,7 @@ def shift_code_to_role(shift_code: str, workstation_roles: dict = None) -> str:
 
     Legacy '櫃台' (without 早/晚 suffix) maps to '烤手' so that historical
     CSV data doesn't accidentally grant 領檯 skills. The actual 領檯早/領檯晚
-    assignments are controlled exclusively via staff_roles.json.
+    assignments are controlled via RULES.md parsing (parse_rules_md).
     """
     if not shift_code:
         return "烤手"
@@ -552,6 +553,192 @@ def print_demand_profile(demand_profile: dict):
     print()
 
 
+# ─── RULES.md Parser ─────────────────────────────────────────────────────────
+
+def parse_rules_md(rules_path: str, identity_map: dict,
+                   workstation_roles: dict = None) -> dict:
+    """Parse RULES.md to extract staff role information.
+
+    Extracts:
+    - Manager (幹部) names
+    - 領檯 early/late assignments
+    - PT (兼職) employees
+
+    Uses generic patterns — no tenant-specific logic is hard-coded.
+
+    Args:
+        rules_path: Path to RULES.md file.
+        identity_map: {employee_id: {chinese_name, english_name, ...}} from resolve_identities.
+        workstation_roles: workstation_roles dict from tenant_config.json (for validation).
+
+    Returns:
+        {
+            "managers": ["林靜宜", "史曜誠", ...],
+            "role_overrides": {"吳咨錞": ["領檯早", "烤手"], ...},
+            "pt_employees": ["某兼職", ...],
+        }
+    """
+    result = {"managers": [], "role_overrides": {}, "pt_employees": []}
+
+    if not os.path.exists(rules_path):
+        return result
+
+    with open(rules_path, encoding="utf-8") as f:
+        content = f.read()
+
+    lines = content.split("\n")
+
+    # Build set of valid role names from tenant config
+    valid_roles = set()
+    if workstation_roles:
+        valid_roles = set(workstation_roles.values())
+
+    # ── Extract 幹部 (manager) names ──
+    # Pattern: line containing 幹部 keyword followed by colon and comma/頓號-separated names
+    for line in lines:
+        if "幹部" in line and ("：" in line or ":" in line):
+            # Split on ：or : to get the names part
+            sep = "：" if "：" in line else ":"
+            parts = line.split(sep, 1)
+            if len(parts) == 2:
+                names_str = parts[1].strip()
+                # Remove markdown formatting
+                names_str = re.sub(r'\*+', '', names_str)
+                # Split by comma, 頓號, or 、
+                names = re.split(r'[,，、]\s*', names_str)
+                names = [n.strip() for n in names if n.strip() and len(n.strip()) >= 2]
+                if names:
+                    result["managers"] = names
+                    break
+
+    # ── Extract 領檯 (counter) assignments ──
+    # Look for a section mentioning 領檯 or 櫃台, then find 早班/晚班 lines
+    in_counter_section = False
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+
+        # Detect counter section: line containing 領檯 or 櫃台
+        if re.search(r'(領檯|櫃台)', stripped) and not in_counter_section:
+            in_counter_section = True
+            # Check if this line itself has early/late info
+            # e.g., "* **領檯 (櫃台)**："
+
+        if in_counter_section:
+            # Look for 早班 line
+            if re.search(r'早班', stripped):
+                sep = "：" if "：" in stripped else (":" if ":" in stripped else None)
+                if sep:
+                    names_str = stripped.split(sep, 1)[1].strip()
+                    names = re.split(r'[,，、]\s*', names_str)
+                    names = [n.strip() for n in names if n.strip() and len(n.strip()) >= 2]
+                    for name in names:
+                        # Default: 領檯早 + 烤手 (counter staff can also do grill)
+                        result["role_overrides"][name] = ["領檯早", "烤手"]
+
+            # Look for 晚班 line
+            if re.search(r'晚班', stripped):
+                sep = "：" if "：" in stripped else (":" if ":" in stripped else None)
+                if sep:
+                    names_str = stripped.split(sep, 1)[1].strip()
+                    names = re.split(r'[,，、]\s*', names_str)
+                    names = [n.strip() for n in names if n.strip() and len(n.strip()) >= 2]
+                    for name in names:
+                        result["role_overrides"][name] = ["領檯晚", "烤手"]
+
+            # Exit counter section on blank line or new section header
+            if in_counter_section and (stripped == "" or stripped.startswith("#")):
+                if any(result["role_overrides"]):
+                    in_counter_section = False
+
+    # ── Extract 兼職/PT employees ──
+    for line in lines:
+        if re.search(r'(兼職|PT)\s*[（(]?\s*\d*\s*[位人）)]?\s*[：:]', line):
+            sep = "：" if "：" in line else ":"
+            parts = line.split(sep, 1)
+            if len(parts) == 2:
+                names_str = parts[1].strip()
+                names_str = re.sub(r'\*+', '', names_str)
+                names = re.split(r'[,，、]\s*', names_str)
+                names = [n.strip() for n in names if n.strip() and len(n.strip()) >= 2]
+                result["pt_employees"] = names
+                break
+
+    return result
+
+
+def _resolve_name_to_id(name: str, identity_map: dict) -> Optional[str]:
+    """Resolve a chinese/english name to employee_id using identity_map.
+
+    Tries exact match on chinese_name, then english_name, then partial match.
+    Returns employee_id or None.
+    """
+    # Exact chinese_name match
+    for eid, info in identity_map.items():
+        if info.get("chinese_name") == name:
+            return eid
+    # Exact english_name match
+    for eid, info in identity_map.items():
+        if info.get("english_name") and info["english_name"].lower() == name.lower():
+            return eid
+    # Partial chinese_name match (name is substring or vice versa)
+    for eid, info in identity_map.items():
+        cn = info.get("chinese_name", "")
+        if cn and (name in cn or cn in name):
+            return eid
+    return None
+
+
+def apply_rules_delta(habits: list, rules_delta: dict, identity_map: dict):
+    """Apply parsed RULES.md delta to habits list (in-place).
+
+    - Sets is_manager=True for manager employees
+    - Overrides workstation_skills for role_overrides
+    - Sets employee_type="pt" for PT employees
+    """
+    # Build name→habit lookup for quick access
+    id_to_habit = {h.employee_id: h for h in habits}
+
+    # Apply managers
+    manager_count = 0
+    for name in rules_delta.get("managers", []):
+        eid = _resolve_name_to_id(name, identity_map)
+        if eid and eid in id_to_habit:
+            id_to_habit[eid].is_manager = True
+            manager_count += 1
+        elif eid is None:
+            print(f"   ⚠️  RULES.md 幹部「{name}」無法對應到員工 ID")
+
+    # Apply role overrides
+    override_count = 0
+    for name, skills in rules_delta.get("role_overrides", {}).items():
+        eid = _resolve_name_to_id(name, identity_map)
+        if eid and eid in id_to_habit:
+            id_to_habit[eid].workstation_skills = skills
+            override_count += 1
+        elif eid is None:
+            print(f"   ⚠️  RULES.md 領檯「{name}」無法對應到員工 ID")
+
+    # Apply PT employees
+    pt_count = 0
+    for name in rules_delta.get("pt_employees", []):
+        eid = _resolve_name_to_id(name, identity_map)
+        if eid and eid in id_to_habit:
+            id_to_habit[eid].employee_type = "pt"
+            pt_count += 1
+
+    parts = []
+    if manager_count:
+        parts.append(f"{manager_count} 位幹部")
+    if override_count:
+        parts.append(f"{override_count} 位角色覆蓋")
+    if pt_count:
+        parts.append(f"{pt_count} 位兼職")
+    if parts:
+        print(f"   📋 RULES.md: {', '.join(parts)}")
+    else:
+        print(f"   📋 RULES.md: 無可解析的員工角色資訊")
+
+
 # ─── Main Pipeline ────────────────────────────────────────────────────────────
 
 def run_analyzer(csv_paths: list, output_path: str = "habits.json"):
@@ -603,7 +790,21 @@ def run_analyzer(csv_paths: list, output_path: str = "habits.json"):
     # Step 3: Habit Calculation
     habits = calculate_habits(identity_map)
     tenant_dir = os.path.dirname(csv_paths[0]) if csv_paths else "."
-    merge_staff_roles(habits, tenant_dir)   # override workstation_skills from staff_roles.json
+
+    # Load tenant config once (used by RULES.md parser and demand analysis)
+    tenant_config = None
+    workstation_roles = None
+    holidays = None
+    if tenant_dir and os.path.exists(os.path.join(tenant_dir, "tenant_config.json")):
+        tenant_config = load_tenant_config(tenant_dir)
+        workstation_roles = tenant_config.workstation_roles
+        holidays = tenant_config.region_holidays
+
+    # Step 4: Parse RULES.md and apply delta (replaces old merge_staff_roles)
+    rules_path = os.path.join(tenant_dir, "RULES.md")
+    rules_delta = parse_rules_md(rules_path, identity_map, workstation_roles)
+    apply_rules_delta(habits, rules_delta, identity_map)
+
     print(f"\n📊 習慣計算完成: {len(habits)} 位在職員工")
 
     # Show summary
@@ -613,28 +814,22 @@ def run_analyzer(csv_paths: list, output_path: str = "habits.json"):
         print(f"      工作站技能: {', '.join(h.workstation_skills[:3])}")
         print(f"      週均工時: {h.avg_weekly_hours}h")
         print(f"      加班意願: {h.overtime_willingness or '未設定'}")
+        if h.is_manager:
+            print(f"      🏷️  幹部")
 
-    # Step 4: Shift coverage analysis (legacy)
+    # Step 5: Shift coverage analysis (legacy)
     coverage = analyze_shift_coverage(identity_map)
     print(f"\n📈 班次覆蓋分析 (by shift slot):")
     for slot, data in coverage.items():
         slot_zh = {"morning": "早班", "afternoon": "午班", "evening": "晚班"}.get(slot, slot)
         print(f"   {slot_zh}: 平均 {data['avg_headcount']} 人")
 
-    # Step 5: Store demand analysis — Goal 2
-    # Load tenant config for workstation_roles and holidays
-    tenant_config = None
-    workstation_roles = None
-    holidays = None
-    if tenant_dir and os.path.exists(os.path.join(tenant_dir, "tenant_config.json")):
-        tenant_config = load_tenant_config(tenant_dir)
-        workstation_roles = tenant_config.workstation_roles
-        holidays = tenant_config.region_holidays
+    # Step 6: Store demand analysis — Goal 2
     demand_profile = analyze_store_demand(roster_paths, identity_map,
                                           workstation_roles, holidays)
     print_demand_profile(demand_profile)
 
-    # Step 6: Output habits.json
+    # Step 7: Output habits.json
     habits_to_json(habits, output_path)
 
     # Save coverage analysis

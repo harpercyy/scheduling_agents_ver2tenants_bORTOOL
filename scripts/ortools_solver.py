@@ -301,11 +301,13 @@ class DemandScheduleSolver:
             self.shift_defs = tenant_config.shift_defs
             self.workstation_roles = tenant_config.workstation_roles
             self.max_weekly_hours = tenant_config.constraints.get("max_weekly_hours", 46)
+            self.min_rest_hours = tenant_config.constraints.get("min_rest_hours", 11)
             self.holidays = tenant_config.region_holidays
         else:
             self.shift_defs = SHIFT_DEFS  # fallback to module-level (deprecated)
             self.workstation_roles = {}
             self.max_weekly_hours = 46
+            self.min_rest_hours = 11
             self.holidays = set()
 
         self.week_start = datetime.strptime(week_start_date, "%Y-%m-%d")
@@ -347,6 +349,26 @@ class DemandScheduleSolver:
     def _shift_hours(self, shift_code: str) -> float:
         defn = self.shift_defs.get(shift_code)
         return defn["hours"] if defn else 8.0
+
+    def _shift_start_minutes(self, shift_code: str) -> int:
+        """Return start time in minutes since midnight."""
+        defn = self.shift_defs.get(shift_code)
+        if defn:
+            parts = defn["start"].split(":")
+            return int(parts[0]) * 60 + int(parts[1])
+        return 12 * 60
+
+    def _shift_end_minutes(self, shift_code: str) -> int:
+        """Return end time in minutes since midnight, adjusted +24h for overnight."""
+        defn = self.shift_defs.get(shift_code)
+        if not defn:
+            return 20 * 60
+        parts = defn["end"].split(":")
+        end_m = int(parts[0]) * 60 + int(parts[1])
+        start_m = self._shift_start_minutes(shift_code)
+        if end_m <= start_m:
+            end_m += 24 * 60
+        return end_m
 
     def _is_late_shift(self, shift_code: str) -> bool:
         return self._shift_start_hour(shift_code) >= 17
@@ -409,25 +431,33 @@ class DemandScheduleSolver:
                 ) <= 5
             )
 
-        # HC3: Rest between late and early shifts (next day)
-        late_indices = [i for i, sc in enumerate(self.shift_codes)
-                        if self._is_late_shift(sc)]
-        early_indices = [i for i, sc in enumerate(self.shift_codes)
-                         if self._is_early_shift(sc)]
-        if late_indices and early_indices:
-            for e in range(self.num_employees):
-                for d in range(self.num_days - 1):
-                    late_sum = sum(self.vars[e][d][i] for i in late_indices)
-                    early_sum = sum(self.vars[e][d+1][i] for i in early_indices)
-                    self.model.Add(late_sum + early_sum <= 1)
+        # HC3: Min rest between consecutive shifts (gap-based forbidden pairs)
+        min_rest_mins = self.min_rest_hours * 60
+        forbidden_pairs = []  # (shift_index_today, shift_index_tomorrow)
+        for i, sc_i in enumerate(self.shift_codes):
+            end_i = self._shift_end_minutes(sc_i)
+            for j, sc_j in enumerate(self.shift_codes):
+                start_j = self._shift_start_minutes(sc_j)
+                gap = (24 * 60 + start_j) - end_i
+                if gap < min_rest_mins:
+                    forbidden_pairs.append((i, j))
+        for e in range(self.num_employees):
+            for d in range(self.num_days - 1):
+                for i, j in forbidden_pairs:
+                    self.model.Add(self.vars[e][d][i] + self.vars[e][d+1][j] <= 1)
 
-        # HC3-cross: If prev week last day was a late shift, forbid early shift on day 0
-        if self.prev_tail and late_indices and early_indices:
+        # HC3-cross: Forbid day-0 shifts that violate min rest with prev week's last shift
+        if self.prev_tail:
             for e, habit in enumerate(self.habits):
                 tail = self.prev_tail.get(habit.employee_id)
-                if tail and tail.get("last_shift") and self._is_late_shift(tail["last_shift"]):
-                    for i in early_indices:
-                        self.model.Add(self.vars[e][0][i] == 0)
+                if not tail or not tail.get("last_shift"):
+                    continue
+                prev_end = self._shift_end_minutes(tail["last_shift"])
+                for j, sc_j in enumerate(self.shift_codes):
+                    start_j = self._shift_start_minutes(sc_j)
+                    gap = (24 * 60 + start_j) - prev_end
+                    if gap < min_rest_mins:
+                        self.model.Add(self.vars[e][0][j] == 0)
 
         # HC4: Weekly hours cap
         for e in range(self.num_employees):
@@ -662,6 +692,8 @@ class DemandScheduleSolver:
             for sc, required in code_required.items():
                 if sc not in self.sc_idx:
                     continue
+                if required <= 0:
+                    continue  # demand=0 handled below with zero-demand shifts
                 i = self.sc_idx[sc]
                 target = max(1, required) if relax_level >= 2 else required
                 staff_sum = sum(self.vars[e][d][i] for e in range(self.num_employees))
@@ -676,8 +708,9 @@ class DemandScheduleSolver:
                 penalties.append((surplus, W_FAIRNESS))
 
             # Penalize assigning shifts that have zero demand on this day
+            codes_with_demand = {sc for sc, r in code_required.items() if r > 0}
             for i, sc in enumerate(self.shift_codes):
-                if sc not in code_required:
+                if sc not in codes_with_demand:
                     for e in range(self.num_employees):
                         penalties.append((self.vars[e][d][i], W_VAC))
 

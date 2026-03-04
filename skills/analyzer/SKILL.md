@@ -24,7 +24,7 @@ The Analyzer reads historical weekly roster CSVs from `tenants/<tenant>/` and pr
 |------|-------------|
 | CSV files | Weekly roster files from `tenants/<tenant>/` folder |
 | `tenant_config.json` | Tenant configuration — defines `csv_parser`, `workstation_roles` |
-| `staff_roles.json` | Employee skills override (in tenant folder, optional) |
+| `RULES.md` | Business rules — Analyzer parses manager (幹部) list and counter (領檯) assignments |
 
 > **多租戶注意**：不同租戶的 CSV 格式可能不同。`tenant_config.json` 的 `csv_parser` 欄位決定使用哪個解析器。目前支援：
 > - `gold_pig_v1` — 金豬外場 Excel 匯出格式（multi-row per employee, Traditional Chinese）
@@ -56,7 +56,7 @@ pip install pandas  # if not already installed
 
 ```bash
 ls tenants/<tenant>/
-# Expected: tenant_config.json, staff_roles.json, *.csv, RULES.md
+# Expected: tenant_config.json, *.csv, RULES.md
 ```
 
 ### Step 3 — Run the Analyzer
@@ -117,6 +117,7 @@ habits.json
 └── avg_shifts_per_week  float    — used by Scheduler SC3 for personalized fairness
 └── shift_frequency      dict     — shift codes or time labels with counts
 └── workstation_frequency dict
+└── is_manager          boolean  — True if 幹部 (parsed from RULES.md)
 ```
 
 ---
@@ -128,4 +129,5 @@ habits.json
 | `Could not find date header row` | Check CSV is unmodified; verify `csv_parser` in `tenant_config.json` matches file format |
 | `0 employees found` | Confirm CSV format matches the parser for this tenant |
 | Incorrect shift counts | Check CSV week range covers full 7 days |
-| Wrong workstation skills | Check `staff_roles.json` in tenant folder — it overrides CSV-derived skills |
+| Wrong workstation skills | Check RULES.md — Analyzer parses 領檯 assignments to override CSV-derived skills |
+| Missing is_manager | Check RULES.md — ensure 幹部 list uses `**幹部**：name1, name2` format |

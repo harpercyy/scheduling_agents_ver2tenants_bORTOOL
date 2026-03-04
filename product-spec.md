@@ -55,7 +55,7 @@
 tenants/
 ├── TEMPLATE/              ← 空白租戶範本
 │   ├── tenant_config.json ← 班次、角色、約束、人力需求
-│   ├── staff_roles.json   ← 員工技能與主管設定
+│   ├── tenant_config.json ← 班次、角色、約束、主管約束、禁同休
 │   ├── events.json        ← 包場 / 特殊事件
 │   ├── rest_days.json     ← 指定劃休
 │   └── RULES.md           ← 商業規則（人類 & AI 可讀）

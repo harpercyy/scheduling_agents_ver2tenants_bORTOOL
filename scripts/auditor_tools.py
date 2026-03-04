@@ -154,11 +154,12 @@ def check_p0_labor_law(grouped_by_emp: dict, rest_days: dict = None,
             curr = working_entries[i]
             nxt  = working_entries[i + 1]
             curr_end   = parse_time(curr.get("shift_end", ""))
+            curr_start = parse_time(curr.get("shift_start", ""))
             nxt_start  = parse_time(nxt.get("shift_start", ""))
             if curr_end < 0 or nxt_start < 0:
                 continue
-            # Adjust for overnight shifts
-            if "<" in curr.get("shift_end", ""):
+            # Adjust for overnight shifts: end time <= start time means next day
+            if curr_start >= 0 and curr_end <= curr_start:
                 curr_end += 24 * 60
 
             # Calculate actual gap (accounting for different dates)
@@ -860,8 +861,9 @@ if __name__ == "__main__":
     if tenant_dir and output_path == "audit_report.json":
         out_dir = os.path.join(tenant_dir, "output")
         os.makedirs(out_dir, exist_ok=True)
-        tag = week_start.replace("-", "")[4:] if week_start else "auto"
-        output_path = os.path.join(out_dir, f"audit_{tag}.json")
+        week_tag = week_start.replace("-", "") if week_start else "auto"
+        now_tag = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_path = os.path.join(out_dir, f"audit_{week_tag}_{now_tag}.json")
 
     report = run_auditor(schedule_path, habits_path, output_path,
                          tenant_dir=tenant_dir, week_start=week_start,
