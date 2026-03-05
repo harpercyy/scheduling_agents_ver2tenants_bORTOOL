@@ -72,13 +72,16 @@ def is_holiday(short_date: str, holidays: set = None) -> bool:
         return False
 
 
-def get_scenario(short_date: str, package_dates: set, holidays: set = None) -> str:
+def get_scenario(short_date: str, package_dates: set, holidays: set = None,
+                  scenarios: list = None) -> str:
+    """scenarios order: [weekday, weekday+package, weekend, weekend+package]."""
+    labels = scenarios or ["平日", "平日包場", "週末", "週末包場"]
     hol = is_holiday(short_date, holidays)
     pkg = short_date in package_dates
-    if hol and pkg:  return "週末包場"
-    if hol:          return "週末"
-    if pkg:          return "平日包場"
-    return "平日"
+    if hol and pkg:  return labels[3]
+    if hol:          return labels[2]
+    if pkg:          return labels[1]
+    return labels[0]
 
 
 def get_date_cols(path: str) -> dict:
@@ -116,14 +119,14 @@ def run(tenant_dir: str, output_path: str = "habits_demand_shift.json"):
         # Get date → scenario mapping for this file
         date_col_map = get_date_cols(path)  # short_date → col_idx (unused here)
         all_dates.update(date_col_map.keys())
-        date_scenarios = {d: get_scenario(d, package_dates, holidays) for d in date_col_map}
+        date_scenarios = {d: get_scenario(d, package_dates, holidays, tenant_config.scenarios) for d in date_col_map}
 
         employees = parse_roster_csv(path)
         for emp in employees:
             for s in emp.shifts:
                 if s.leave_type or not s.start_time or not s.workstation:
                     continue
-                scen = date_scenarios.get(s.date, "平日")
+                scen = date_scenarios.get(s.date, tenant_config.scenarios[0])
 
                 # Handle csv_code_aliases: expand ambiguous codes
                 if s.workstation in csv_aliases:
@@ -140,7 +143,7 @@ def run(tenant_dir: str, output_path: str = "habits_demand_shift.json"):
     # 計算每個情境的天數
     scenario_days = defaultdict(int)
     for d in all_dates:
-        scen = get_scenario(d, package_dates, holidays)
+        scen = get_scenario(d, package_dates, holidays, tenant_config.scenarios)
         scenario_days[scen] += 1
 
     SCENARIOS = tenant_config.scenarios

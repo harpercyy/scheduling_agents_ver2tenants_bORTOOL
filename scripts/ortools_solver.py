@@ -92,20 +92,25 @@ def load_package_dates(tenant_dir: str) -> set:
                 # Short form M-D → try to resolve
                 try:
                     m, day = map(int, d.split("-"))
-                    year = 2026 if m <= 6 else 2025
+                    year = datetime.today().year
                     pkg.add(f"{year}-{m:02d}-{day:02d}")
                 except Exception:
                     pass
     return pkg
 
 
-def get_scenario(date_str: str, package_dates: set, holidays: set = None) -> str:
+def get_scenario(date_str: str, package_dates: set, holidays: set = None,
+                  scenarios: list = None) -> str:
+    """Map a date to its scenario name.
+    scenarios order convention: [weekday, weekday+package, weekend, weekend+package].
+    """
+    labels = scenarios or ["平日", "平日包場", "週末", "週末包場"]
     hol = is_holiday(date_str, holidays)
     pkg = date_str in package_dates
-    if hol and pkg:  return "週末包場"
-    if hol:          return "週末"
-    if pkg:          return "平日包場"
-    return "平日"
+    if hol and pkg:  return labels[3]
+    if hol:          return labels[2]
+    if pkg:          return labels[1]
+    return labels[0]
 
 
 # ─── Rest Days & Manager Config Loaders ──────────────────────────────────────
@@ -241,15 +246,22 @@ def get_day_requirements(scenario: str, demand_profile: dict) -> list:
 
 # ─── Workstation Role Helper ──────────────────────────────────────────────────
 
+def _default_role(workstation_roles: dict = None) -> str:
+    """Return the most common role from workstation_roles, or first value as fallback."""
+    if not workstation_roles:
+        return "烤手"
+    from collections import Counter
+    role_counts = Counter(workstation_roles.values())
+    return role_counts.most_common(1)[0][0]
+
+
 def shift_code_to_role(shift_code: str, workstation_roles: dict = None) -> str:
     """Map a shift code to its workstation role using tenant config.
-    Args:
-        shift_code: e.g. 'B103', '櫃台(早)'
-        workstation_roles: Mapping from tenant_config.json. Falls back to '烤手'.
+    Falls back to the most common role in workstation_roles.
     """
     if workstation_roles:
-        return workstation_roles.get(shift_code, "烤手")
-    return "烤手"
+        return workstation_roles.get(shift_code, _default_role(workstation_roles))
+    return _default_role()
 
 
 # ─── Employee Skill Matching ──────────────────────────────────────────────────
@@ -264,8 +276,8 @@ def employee_can_do_shift(habit: Habit, shift_code: str, role: str,
     skills = set(habit.workstation_skills)
 
     if not skills:
-        # No skill data → only 烤手
-        return role_needed == "烤手"
+        # No skill data → only default role
+        return role_needed == _default_role(workstation_roles)
 
     return role_needed in skills
 
@@ -346,7 +358,8 @@ class DemandScheduleSolver:
         self.day_requirements = []  # list of {shift_code, role, required}
         for d in range(self.num_days):
             date_str = self._date_for_day(d)
-            scen = get_scenario(date_str, self.package_dates, self.holidays)
+            scenarios = self.tenant_config.scenarios if self.tenant_config else None
+            scen = get_scenario(date_str, self.package_dates, self.holidays, scenarios)
             self.day_scenarios.append(scen)
             self.day_requirements.append(get_day_requirements(scen, demand_profile))
 
@@ -675,7 +688,7 @@ class DemandScheduleSolver:
                     self.model.Add(deficit >= min_count - role_staff)
                     if not hasattr(self, '_headcount_penalties'):
                         self._headcount_penalties = []
-                    self._headcount_penalties.append((deficit, 200))
+                    self._headcount_penalties.append((deficit, self.weights["W_HEADCOUNT"]))
 
     def _add_headcount_constraints(self, relax_level: int = 0):
         """Add minimum daily total headcount constraints (HC8).
@@ -829,14 +842,15 @@ class DemandScheduleSolver:
                                               pref_rank * W_PREF))
 
         # ── SC3: Fairness — personalised target from avg_shifts_per_week ──
+        max_wd = self.tenant_config.constraints.get("max_working_days", 5) if self.tenant_config else 5
         for e, habit in enumerate(self.habits):
             avg = habit.avg_shifts_per_week
             if avg and avg > 0:
                 # Values > 7 are likely biweekly totals → halve them
                 target_raw = avg / 2.0 if avg > 7 else avg
-                target_days = max(1, min(6, round(target_raw)))
+                target_days = max(1, min(max_wd + 1, round(target_raw)))
             else:
-                target_days = 5  # default for employees with no data
+                target_days = max_wd  # default for employees with no data
 
             total = sum(
                 self.vars[e][d][i]
@@ -1022,8 +1036,9 @@ class DemandScheduleSolver:
         # Penalize PT employees being assigned to non-evening shifts (start < 17:00)
         W_PT_EVENING = self.weights["W_PT_EVENING"]
         if relax_level < 1:
+            pt_min_hour = self.tenant_config.constraints.get("pt_min_shift_hour", 17) if self.tenant_config else 17
             non_evening_indices = [i for i, sc in enumerate(self.shift_codes)
-                                   if self._shift_start_hour(sc) < 17]
+                                   if self._shift_start_hour(sc) < pt_min_hour]
             for e, habit in enumerate(self.habits):
                 if habit.employee_type == "pt":
                     for d in range(self.num_days):

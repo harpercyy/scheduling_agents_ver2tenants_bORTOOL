@@ -133,7 +133,7 @@ schedule-agents/
 | `timezone` | ✅ | IANA 時區 |
 | `shift_defs` | ✅ | 所有班次定義 `{ code: { start, end, hours } }` |
 | `workstation_roles` | ✅ | 班次代碼 → 崗位角色的對應表 |
-| `scenarios` | ⬚ | 情境名稱列表，預設 `["平日", "平日包場", "週末", "週末包場"]` |
+| `scenarios` | ⬚ | 情境名稱列表，**順序固定**：`[weekday, weekday+package, weekend, weekend+package]`，預設 `["平日", "平日包場", "週末", "週末包場"]` |
 | `min_daily_headcount` | ⬚ | 各情境最低人力，預設全 0（不強制） |
 | `coverage_targets` | ⬚ | 按班次開始時間的最低人力需求（稽核用），`{ "HH:MM": { min, label } }`，無則省略 |
 | `constraints` | ⬚ | 勞動約束覆寫（含 `max_consecutive_working_days`、`no_overtime_max_shifts`、`pt_min_shift_hour`），未設定則用預設值 |

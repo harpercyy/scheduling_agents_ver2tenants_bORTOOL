@@ -372,7 +372,8 @@ def analyze_shift_coverage(identity_map: dict) -> dict:
 
 def analyze_store_demand(csv_paths: list, identity_map: dict,
                          workstation_roles: dict = None,
-                         holidays: set = None) -> dict:
+                         holidays: set = None,
+                         scenarios: list = None) -> dict:
     """
     Analyze 4-scenario staffing demand:
       平日無包場 / 平日有包場 / 假日無包場 / 假日有包場
@@ -479,45 +480,39 @@ def analyze_store_demand(csv_paths: list, identity_map: dict,
         date_context[short_date]["is_package"] = short_date in all_package_short_dates
 
     # ── Step 4: aggregate into 4 scenarios ──
-    scenarios = {
-        "平日": defaultdict(list),
-        "平日包場": defaultdict(list),
-        "週末": defaultdict(list),
-        "週末包場": defaultdict(list),
-    }
+    # Order: [weekday, weekday+package, weekend, weekend+package]
+    scenario_labels = scenarios or ["平日", "平日包場", "週末", "週末包場"]
+    scenario_data = {s: defaultdict(list) for s in scenario_labels}
 
     for short_date, roles in day_data.items():
         ctx = date_context.get(short_date, {})
         is_pkg = ctx.get("is_package", False)
 
-        # Determine if holiday: use weekday from short date
-        # Short dates like '1-5' = Jan 5 = Monday (平日)
-        # We need the year context — assume current CSV year from filename or default 2025/2026
-        # Use a heuristic: if month <= 6 assume 2026, else assume 2025
+        # Determine if holiday: resolve short date M-D to full date
         try:
             parts = short_date.split("-")
             month, day = int(parts[0]), int(parts[1])
-            year = 2026 if month <= 6 else 2025
+            year = datetime.today().year
             full_date = f"{year}-{month:02d}-{day:02d}"
             is_hol = is_holiday(full_date, holidays)
         except (ValueError, IndexError):
             is_hol = False
 
         if is_hol and is_pkg:
-            scenario = "週末包場"
+            scenario = scenario_labels[3]
         elif is_hol:
-            scenario = "週末"
+            scenario = scenario_labels[2]
         elif is_pkg:
-            scenario = "平日包場"
+            scenario = scenario_labels[1]
         else:
-            scenario = "平日"
+            scenario = scenario_labels[0]
 
         for role, count in roles.items():
-            scenarios[scenario][role].append(count)
+            scenario_data[scenario][role].append(count)
 
     # ── Step 5: compute averages ──
     demand_profile = {}
-    for scenario, role_counts in scenarios.items():
+    for scenario, role_counts in scenario_data.items():
         if not role_counts:
             demand_profile[scenario] = {}
             continue
@@ -534,14 +529,17 @@ def analyze_store_demand(csv_paths: list, identity_map: dict,
 
 def print_demand_profile(demand_profile: dict):
     """Pretty-print the demand profile to console."""
-    roles_order = ["烤手", "領檯早", "領檯晚"]
+    # Derive roles from the demand_profile data
+    roles_order = sorted(set(
+        role for profile in demand_profile.values() for role in profile
+    ))
     print("\n📊 店面人力需求分析 (Demand Profile):")
     print(f"{'情境':<12} ", end="")
     for r in roles_order:
         print(f"{r:>8}", end="")
     print()
     print("-" * 48)
-    for scenario in ["平日", "平日包場", "週末", "週末包場"]:
+    for scenario in demand_profile:
         profile = demand_profile.get(scenario, {})
         samples = next((v["samples"] for v in profile.values()), 0)
         print(f"{scenario:<12} ", end="")
@@ -826,7 +824,8 @@ def run_analyzer(csv_paths: list, output_path: str = "habits.json"):
 
     # Step 6: Store demand analysis — Goal 2
     demand_profile = analyze_store_demand(roster_paths, identity_map,
-                                          workstation_roles, holidays)
+                                          workstation_roles, holidays,
+                                          tenant_config.scenarios if tenant_config else None)
     print_demand_profile(demand_profile)
 
     # Step 7: Output habits.json

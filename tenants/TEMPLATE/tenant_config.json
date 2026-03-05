@@ -18,6 +18,7 @@
     "A002": "外場"
   },
 
+  "_scenarios_doc": "情境名稱，順序固定：[weekday, weekday+package, weekend, weekend+package]",
   "scenarios": ["平日", "平日包場", "週末", "週末包場"],
 
   "min_daily_headcount": {
