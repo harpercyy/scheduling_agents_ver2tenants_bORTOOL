@@ -10,12 +10,15 @@ Usage:
   python scripts/run.py --tenant glod-pig --week 2026-03-09 --prev-schedule schedule_0302.csv
   python scripts/run.py --all-tenants --week 2026-03-02
   python scripts/run.py --tenant glod-pig --week 2026-03-02 --step auditor
+  python scripts/run.py --tenant glod-pig --week 2026-03-02 --sweep tenants/glod-pig/weight_sweep.json
 """
 
 import argparse
+import json
 import os
 import sys
 import glob
+import multiprocessing
 from datetime import datetime, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -149,6 +152,171 @@ def run_pipeline(tenant_dir: str, week_start: str,
     return success
 
 
+def _sweep_worker(args):
+    """Worker function for parallel sweep — runs Scheduler + Auditor for one config.
+    Must be a top-level function for multiprocessing pickling.
+    """
+    (label, weights, habits_path, demand_path, schedule_prefix,
+     audit_path, week_start, tenant_dir, prev_schedule) = args
+
+    # Each worker re-imports to avoid shared state issues
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from ortools_solver import run_scheduler
+    from auditor_tools import run_auditor
+
+    try:
+        run_scheduler(
+            habits_path=habits_path,
+            demand_path=demand_path,
+            output_prefix=schedule_prefix,
+            week_start=week_start,
+            tenant_dir=tenant_dir,
+            prev_schedule_path=prev_schedule,
+            weights_override=weights,
+        )
+
+        schedule_csv = f"{schedule_prefix}.csv"
+        if not os.path.exists(schedule_csv):
+            return {"label": label, "weights": weights,
+                    "P0": "ERR", "Hard": "ERR", "P1": "ERR", "P2": "ERR"}
+
+        report = run_auditor(
+            schedule_path=schedule_csv,
+            habits_path=habits_path,
+            output_path=audit_path,
+            tenant_dir=tenant_dir,
+            week_start=week_start,
+            prev_schedule_path=prev_schedule,
+        )
+
+        summary = report.get("summary", {})
+        return {
+            "label": label,
+            "weights": weights,
+            "P0": summary.get("P0", 0),
+            "Hard": summary.get("Hard", 0),
+            "P1": summary.get("P1", 0),
+            "P2": summary.get("P2", 0),
+        }
+    except Exception as e:
+        return {"label": label, "weights": weights,
+                "P0": "ERR", "Hard": "ERR", "P1": "ERR", "P2": "ERR",
+                "error": str(e)}
+
+
+def run_sweep(tenant_dir: str, week_start: str, sweep_path: str,
+              prev_schedule: str = None, parallel: int = 0):
+    """Run multiple weight configurations, compare Scheduler + Auditor results.
+    Args:
+        parallel: Number of parallel workers. 0 = sequential, -1 = cpu_count.
+    """
+    from data_loader import load_tenant_config
+
+    config = load_tenant_config(tenant_dir)
+    output_dir = ensure_output_dir(tenant_dir)
+
+    habits_path = os.path.join(output_dir, "habits.json")
+    demand_path = os.path.join(output_dir, "habits_demand_shift.json")
+
+    if not os.path.exists(habits_path):
+        print(f"❌ {habits_path} not found — run analyzer first")
+        return False
+    if not os.path.exists(demand_path):
+        print(f"❌ {demand_path} not found — run demand analysis first")
+        return False
+
+    with open(sweep_path, encoding="utf-8") as f:
+        sweep_configs = json.load(f)
+
+    if not isinstance(sweep_configs, list) or not sweep_configs:
+        print("❌ sweep JSON must be a non-empty array of {label, weights} objects")
+        return False
+
+    week_tag = week_start.replace("-", "")
+    now_tag = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    # Build task args for each config
+    task_args = []
+    for idx, cfg in enumerate(sweep_configs):
+        label = cfg.get("label", f"config_{idx}")
+        weights = cfg.get("weights", {})
+        file_tag = f"{week_tag}_{now_tag}_{label}"
+        schedule_prefix = os.path.join(output_dir, f"schedule_{file_tag}")
+        audit_path = os.path.join(output_dir, f"audit_{file_tag}.json")
+        task_args.append((label, weights, habits_path, demand_path,
+                          schedule_prefix, audit_path, week_start,
+                          tenant_dir, prev_schedule))
+
+    n_workers = parallel if parallel > 0 else (multiprocessing.cpu_count() if parallel == -1 else 0)
+    mode = f"parallel ({n_workers} workers)" if n_workers > 0 else "sequential"
+
+    print(f"\n{'='*60}")
+    print(f"  Weight Sweep — {config.display_name}")
+    print(f"  {len(sweep_configs)} configuration(s) from {sweep_path}")
+    print(f"  mode: {mode}")
+    print(f"{'='*60}")
+
+    if n_workers > 0:
+        with multiprocessing.Pool(processes=n_workers) as pool:
+            results = pool.map(_sweep_worker, task_args)
+    else:
+        results = []
+        for idx, args in enumerate(task_args):
+            label = args[0]
+            weights = args[1]
+            print(f"\n{'─'*60}")
+            print(f"  [{idx+1}/{len(task_args)}] {label}")
+            if weights:
+                print(f"  weights: {weights}")
+            else:
+                print(f"  weights: (defaults)")
+            print(f"{'─'*60}")
+            results.append(_sweep_worker(args))
+
+    # Print comparison table
+    _print_sweep_table(results)
+    return True
+
+
+def _print_sweep_table(results: list):
+    """Print a formatted comparison table of sweep results."""
+    if not results:
+        return
+
+    # Column widths
+    max_label = max(len(r["label"]) for r in results)
+    lw = max(max_label, 5)  # min width for "Label"
+
+    def fmt(val):
+        return str(val).rjust(4)
+
+    header = (f"{'Label'.ljust(lw)}  {'P0':>4}  {'Hard':>4}  "
+              f"{'P1':>4}  {'P2':>4}  {'Total':>5}")
+    sep = "─" * len(header)
+
+    print(f"\n{'='*60}")
+    print("  Weight Sweep — Comparison Table")
+    print(f"{'='*60}\n")
+    print(f"  {header}")
+    print(f"  {sep}")
+
+    for r in results:
+        p0 = r["P0"]
+        hard = r["Hard"]
+        p1 = r["P1"]
+        p2 = r["P2"]
+        if isinstance(p0, int) and isinstance(p1, int) and isinstance(p2, int):
+            hard_v = hard if isinstance(hard, int) else 0
+            total = p0 + hard_v + p1 + p2
+        else:
+            total = "ERR"
+        print(f"  {r['label'].ljust(lw)}  {fmt(p0)}  {fmt(hard)}  "
+              f"{fmt(p1)}  {fmt(p2)}  {str(total).rjust(5)}")
+
+    print(f"  {sep}")
+    print()
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Schedule Agents — Unified Pipeline Runner",
@@ -159,6 +327,7 @@ Examples:
   python scripts/run.py --tenant glod-pig --week 2026-03-09 --prev-schedule tenants/glod-pig/output/schedule_20260302.csv
   python scripts/run.py --all-tenants --week 2026-03-02
   python scripts/run.py --tenant glod-pig --week 2026-03-02 --step auditor
+  python scripts/run.py --tenant glod-pig --week 2026-03-02 --sweep tenants/glod-pig/weight_sweep.json
 
 Output files are written to tenants/<tenant>/output/:
   habits.json, habits_demand_shift.json,
@@ -176,12 +345,31 @@ Output files are written to tenants/<tenant>/output/:
     parser.add_argument("--step", default="all",
                         choices=["all", "analyzer", "demand", "scheduler", "auditor"],
                         help="Run only a specific pipeline step (default: all)")
+    parser.add_argument("--sweep", default=None, metavar="JSON_FILE",
+                        help="Run weight sweep: test multiple weight configs "
+                             "(Scheduler+Auditor) and compare results")
+    parser.add_argument("--parallel", type=int, default=0, metavar="N",
+                        help="Parallel workers for --sweep (0=sequential, "
+                             "-1=all CPUs, N=specific count)")
 
     args = parser.parse_args()
 
     week_start = args.week or get_next_monday()
 
-    if args.all_tenants:
+    if args.sweep:
+        if not args.tenant:
+            print("❌ --sweep requires --tenant (not --all-tenants)")
+            sys.exit(1)
+        tenant_dir = f"tenants/{args.tenant}"
+        if not os.path.isdir(tenant_dir):
+            print(f"❌ Tenant directory not found: {tenant_dir}")
+            sys.exit(1)
+        if not os.path.exists(args.sweep):
+            print(f"❌ Sweep config not found: {args.sweep}")
+            sys.exit(1)
+        run_sweep(tenant_dir, week_start, args.sweep, args.prev_schedule,
+                  parallel=args.parallel)
+    elif args.all_tenants:
         tenants = discover_tenants()
         if not tenants:
             print("❌ No tenant directories found in tenants/")
