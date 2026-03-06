@@ -45,7 +45,8 @@ The Scheduler uses Google OR-Tools **CP-SAT** to generate a weekly roster that:
 | `no_same_rest` | `tenant_config.json` | Pairs that cannot rest on same day |
 | `is_manager` | `habits.json` (per employee) | Identifies which employees are managers |
 | `package_dates` | `events.json` | Private event dates (affects scenario detection) |
-| `designated_rest` | `rest_days.json` | Employee-designated rest days |
+| `designated_rest` | `availability.json`（fallback: `rest_days.json`） | FT employee-designated rest days |
+| `pt_availability` | `availability.json` | PT employee available time windows |
 
 ### Demand Profile Format (`habits_demand_shift.json`)
 
@@ -183,7 +184,8 @@ python scripts/auditor_tools.py schedule_0302.csv habits.json audit_0302.json te
 | Min rest between shifts | From `tenant_config.json → constraints.min_rest_hours` |
 | Max weekly hours | From `tenant_config.json → constraints.max_weekly_hours` |
 | Skill match (workstation_skills) | Always enforced |
-| Designated rest days | Always enforced (labor law) |
+| Designated rest days (HC6) | Always enforced (labor law) |
+| PT availability windows (HC13) | Always enforced — PT only scheduled within declared time windows |
 | Manager coverage | From `tenant_config.json → manager_constraints` + `habits.json → is_manager` |
 | No-same-rest pairs | From `tenant_config.json → no_same_rest` |
 | Demand minimum per shift code | Always enforced (relaxed to 1 at Level 2) |

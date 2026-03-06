@@ -28,7 +28,7 @@ from collections import defaultdict
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from data_loader import (Habit, ScheduleEntry, load_habits_json,
                           load_tenant_config, load_manager_constraints,
-                          get_region_holidays)
+                          load_availability, get_region_holidays)
 
 try:
     from ortools.sat.python import cp_model
@@ -313,7 +313,8 @@ class DemandScheduleSolver:
                  min_daily_headcount: dict = None,
                  prev_tail: dict = None,
                  tenant_config=None,
-                 weights_override: dict = None):
+                 weights_override: dict = None,
+                 pt_availability: dict = None):
         self.habits = habits
         self.demand_profile = demand_profile
         self.package_dates = package_dates or set()
@@ -322,6 +323,7 @@ class DemandScheduleSolver:
         self.manager_config = manager_config or {}
         self.min_daily_headcount = min_daily_headcount  # from tenant_config.min_daily_headcount
         self.prev_tail = prev_tail or {}
+        self.pt_availability = pt_availability or {}
         self.weights = {**DEFAULT_WEIGHTS, **(weights_override or {})}
 
         # Tenant config — provides shift_defs, workstation_roles, constraints, holidays
@@ -642,6 +644,29 @@ class DemandScheduleSolver:
                     ).OnlyEnforceIf(w_next.Not())
                     # Forbid: w_prev AND r_curr AND w_next
                     self.model.AddBoolOr([w_prev.Not(), r_curr.Not(), w_next.Not()])
+
+        # HC13: PT availability time windows
+        # PT employees can only be assigned shifts within their declared available windows.
+        # Days not listed → unavailable (all shifts = 0).
+        # Listed days → only shifts whose time range falls within the window.
+        for e, habit in enumerate(self.habits):
+            if habit.employee_type != "pt":
+                continue
+            avail = self.pt_availability.get(habit.employee_id)
+            if avail is None:
+                continue  # no data → keep existing behavior (SC8 soft constraint)
+            for d in range(self.num_days):
+                if d not in avail:
+                    # Not listed → unavailable entire day
+                    for i in range(self.num_shifts):
+                        self.model.Add(self.vars[e][d][i] == 0)
+                else:
+                    avail_start, avail_end = avail[d]
+                    for i, sc in enumerate(self.shift_codes):
+                        s_start = self._shift_start_minutes(sc)
+                        s_end = self._shift_end_minutes(sc)
+                        if s_start < avail_start or s_end > avail_end:
+                            self.model.Add(self.vars[e][d][i] == 0)
 
         # HC10: Minimum daily per-role coverage (e.g., 領檯早 >= 1, 領檯晚 >= 1)
         self._add_role_coverage_constraints(relax_level)
@@ -1228,12 +1253,17 @@ def run_scheduler(habits_path: str, demand_path: str,
         days_ahead = (7 - today.weekday()) % 7 or 7
         week_start = (today + timedelta(days=days_ahead)).strftime("%Y-%m-%d")
 
-    # Load rest days
-    rd_path = rest_days_path or (os.path.join(tenant_dir, "rest_days.json")
-                                  if tenant_dir else None)
-    rest_days = load_rest_days(rd_path, week_start) if rd_path else {}
+    # Load availability (preferred) or fallback to rest_days.json
+    rest_days = {}
+    pt_availability = {}
+    if tenant_dir:
+        rest_days, pt_availability = load_availability(tenant_dir, week_start)
+    elif rest_days_path:
+        rest_days = load_rest_days(rest_days_path, week_start)
     if rest_days:
         print(f"🛌 指定劃休: {len(rest_days)} 位員工有指定休假日")
+    if pt_availability:
+        print(f"📋 PT 可用時段: {len(pt_availability)} 位兼職員工")
 
     # Load previous week schedule for cross-week constraints
     prev_tail = load_prev_tail(prev_schedule_path, habits) if prev_schedule_path else {}
@@ -1255,6 +1285,7 @@ def run_scheduler(habits_path: str, demand_path: str,
         prev_tail=prev_tail,
         tenant_config=tenant_config,
         weights_override=weights_override,
+        pt_availability=pt_availability,
     )
 
     print(f"\n🔧 開始求解...")

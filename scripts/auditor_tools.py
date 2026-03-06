@@ -21,7 +21,7 @@ from datetime import datetime, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from data_loader import (load_habits_json, WORKSTATION_CODES, load_tenant_config,
-                         load_manager_constraints)
+                         load_manager_constraints, load_availability)
 from ortools_solver import is_holiday, load_rest_days
 
 
@@ -106,15 +106,20 @@ def parse_time(t: str) -> int:
 # ─── P0: Labor Law Checks ────────────────────────────────────────────────────
 
 def check_p0_labor_law(grouped_by_emp: dict, rest_days: dict = None,
-                       tenant_config=None) -> list:
+                       tenant_config=None, pt_availability: dict = None,
+                       habits_map: dict = None) -> list:
     """
     P0 — 勞基法 compliance checks.
     These are legal requirements; violations must be fixed immediately.
     Args:
         tenant_config: TenantConfig instance for shift_defs and constraints.
+        pt_availability: {employee_id: {date_str: (start_min, end_min)}} for PT window checks.
+        habits_map: {employee_id: Habit} for employee type lookup.
     """
     violations = []
     rest_days = rest_days or {}
+    pt_availability = pt_availability or {}
+    habits_map = habits_map or {}
     shift_defs = tenant_config.shift_defs if tenant_config else {}
     constraints = tenant_config.constraints if tenant_config else {}
     min_rest_hours = constraints.get("min_rest_hours", 11)
@@ -256,6 +261,40 @@ def check_p0_labor_law(grouped_by_emp: dict, rest_days: dict = None,
                         date=rest_date,
                         suggestion="移除該日班次，遵守指定劃休",
                     ))
+
+        # P0-006: PT availability window violation
+        habit = habits_map.get(eid)
+        pt_avail = pt_availability.get(eid)
+        if pt_avail is not None and habit and getattr(habit, 'employee_type', 'ft') == "pt":
+            for entry in working_entries:
+                date = entry["date"]
+                if date not in pt_avail:
+                    violations.append(Violation(
+                        priority="P0",
+                        rule_id="P0-006",
+                        description=(f"兼職員工 {eid} 在 {date} 未宣告可上班但被排班"),
+                        employee_id=eid,
+                        date=date,
+                        suggestion="移除該日班次或補充可用性宣告",
+                    ))
+                else:
+                    avail_start, avail_end = pt_avail[date]
+                    shift_start = parse_time(entry.get("shift_start", ""))
+                    shift_end = parse_time(entry.get("shift_end", ""))
+                    if shift_start >= 0 and shift_end >= 0:
+                        if shift_end <= shift_start:
+                            shift_end += 24 * 60
+                        if shift_start < avail_start or shift_end > avail_end:
+                            violations.append(Violation(
+                                priority="P0",
+                                rule_id="P0-006",
+                                description=(f"兼職員工 {eid} 在 {date} 班次時間 "
+                                             f"{entry.get('shift_start', '')}-{entry.get('shift_end', '')} "
+                                             f"超出可用時段"),
+                                employee_id=eid,
+                                date=date,
+                                suggestion="調整班次至員工宣告的可用時段內",
+                            ))
 
     return violations
 
@@ -737,8 +776,9 @@ def run_auditor(schedule_path: str, habits_path: str = None,
         tenant_config = load_tenant_config(tenant_dir)
         print(f"🏪 租戶: {tenant_config.display_name} ({tenant_config.tenant_id})")
 
-    # Load rest_days and manager_config from tenant dir
+    # Load rest_days, pt_availability, and manager_config from tenant dir
     rest_days_dates = {}   # {employee_id: set of date strings}
+    pt_availability_dates = {}  # {employee_id: {date_str: (start_min, end_min)}}
     manager_config = {}
     min_daily_headcount = (tenant_config.min_daily_headcount if tenant_config
                            else {"weekday": 0, "saturday": 0, "sunday": 0, "package": 0})
@@ -749,22 +789,27 @@ def run_auditor(schedule_path: str, habits_path: str = None,
             habits_list = list(habits_map.values()) if habits_map else []
             manager_config = load_manager_constraints(tenant_config, habits_list)
 
-        # Load rest days — need week_start; infer from schedule if not provided
+        # Load availability — need week_start; infer from schedule if not provided
         if not week_start and entries:
             all_dates = sorted(set(e.get("date", "") for e in entries))
             if all_dates:
                 week_start = all_dates[0]
 
         if week_start:
-            rest_days_path = os.path.join(tenant_dir, "rest_days.json")
-            rest_day_indices = load_rest_days(rest_days_path, week_start)
+            ft_rest_indices, pt_avail_indices = load_availability(tenant_dir, week_start)
             # Convert day indices back to date strings for auditor
             ws = datetime.strptime(week_start, "%Y-%m-%d")
-            for emp_id, day_indices in rest_day_indices.items():
+            for emp_id, day_indices in ft_rest_indices.items():
                 rest_days_dates[emp_id] = set(
                     (ws + timedelta(days=d)).strftime("%Y-%m-%d")
                     for d in day_indices
                 )
+            # Convert PT availability day indices to date strings
+            for emp_id, day_windows in pt_avail_indices.items():
+                pt_availability_dates[emp_id] = {
+                    (ws + timedelta(days=d)).strftime("%Y-%m-%d"): window
+                    for d, window in day_windows.items()
+                }
 
     # Load previous week schedule for cross-week detection
     prev_entries = []
@@ -787,7 +832,9 @@ def run_auditor(schedule_path: str, habits_path: str = None,
 
     # P0: Use combined data for cross-week 11h rest detection
     p0 = check_p0_labor_law(combined_by_emp, rest_days=rest_days_dates,
-                            tenant_config=tenant_config)
+                            tenant_config=tenant_config,
+                            pt_availability=pt_availability_dates,
+                            habits_map=habits_map)
     all_violations.extend(p0)
     hard = check_hard_constraints(entries, habits_map)
     all_violations.extend(hard)

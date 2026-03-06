@@ -720,6 +720,76 @@ def load_habits_json(input_path: str) -> list:
     return habits
 
 
+def load_availability(tenant_dir: str, week_start: str, num_days: int = 7) -> tuple:
+    """
+    Load availability.json (preferred) or fallback to rest_days.json.
+    Returns:
+        ft_rest_days: {employee_id: set of day_indices (0-6)}
+        pt_availability: {employee_id: {day_index: (start_minutes, end_minutes)}}
+    """
+    from datetime import datetime, timedelta
+
+    ft_rest_days = {}
+    pt_availability = {}
+    ws = datetime.strptime(week_start, "%Y-%m-%d")
+
+    avail_path = os.path.join(tenant_dir, "availability.json")
+    rest_path = os.path.join(tenant_dir, "rest_days.json")
+
+    if os.path.exists(avail_path):
+        with open(avail_path, encoding="utf-8") as f:
+            data = json.load(f)
+        source = "availability.json"
+    elif os.path.exists(rest_path):
+        with open(rest_path, encoding="utf-8") as f:
+            data = json.load(f)
+        source = "rest_days.json"
+    else:
+        return ft_rest_days, pt_availability
+
+    # Parse designated_rest → ft_rest_days
+    designated = data.get("designated_rest", {})
+    for emp_id, dates in designated.items():
+        day_indices = set()
+        for date_str in dates:
+            try:
+                d = datetime.strptime(date_str, "%Y-%m-%d")
+                diff = (d - ws).days
+                if 0 <= diff < num_days:
+                    day_indices.add(diff)
+            except ValueError:
+                pass
+        if day_indices:
+            ft_rest_days[emp_id] = day_indices
+
+    # Parse pt_availability (only in availability.json)
+    raw_pt = data.get("pt_availability", {})
+    for emp_id, date_windows in raw_pt.items():
+        windows = {}
+        for date_str, time_range in date_windows.items():
+            try:
+                d = datetime.strptime(date_str, "%Y-%m-%d")
+                diff = (d - ws).days
+                if 0 <= diff < num_days:
+                    start_parts = time_range["start"].split(":")
+                    end_parts = time_range["end"].split(":")
+                    start_m = int(start_parts[0]) * 60 + int(start_parts[1])
+                    end_m = int(end_parts[0]) * 60 + int(end_parts[1])
+                    if end_m <= start_m:
+                        end_m += 24 * 60  # overnight
+                    windows[diff] = (start_m, end_m)
+            except (ValueError, KeyError):
+                pass
+        if windows:
+            pt_availability[emp_id] = windows
+
+    rest_count = sum(len(v) for v in ft_rest_days.values())
+    pt_count = len(pt_availability)
+    print(f"📋 可用性載入 ({source}): {rest_count} 筆指定休假, {pt_count} 位 PT 時段")
+
+    return ft_rest_days, pt_availability
+
+
 def load_manager_constraints(tenant_config: TenantConfig, habits: list = None) -> dict:
     """Build manager config dict from TenantConfig + habits.
 

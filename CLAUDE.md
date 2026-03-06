@@ -23,13 +23,17 @@ schedule-agents/
 ├── skills/                            ← 各 Agent 的操作手冊
 │   ├── analyzer/SKILL.md
 │   ├── scheduler/SKILL.md
-│   └── auditor/SKILL.md
+│   ├── auditor/SKILL.md
+│   ├── availability/SKILL.md
+│   └── weight-tuner/SKILL.md
 │
 └── tenants/                           ← 多租戶目錄（每店一個子資料夾）
     ├── TEMPLATE/                      ← 空白租戶範本（複製此目錄建立新租戶）
     │   ├── tenant_config.json         ← 店面設定 schema（班次、角色、人力需求、主管約束、禁同休）
+    │   ├── availability.json          ← 員工可用性（FT 指定休假 + PT 時段）
     │   ├── events.json                ← 包場 / 特殊事件日期
-    │   ├── rest_days.json             ← 指定劃休
+    │   ├── rest_days.json             ← 指定劃休（availability.json 的 fallback）
+    │   ├── line_name_map.json         ← LINE 顯示名稱 → employee_id（Phase 2 用）
     │   ├── RULES.md                   ← 店面商業規則（Analyzer 解析幹部/領檯 + Claude 決策參考）
     │   └── output/                    ← 所有產出檔（自動建立）
     ├── glod-pig/                      ← 金豬 燒肉（現有租戶）
@@ -58,7 +62,7 @@ schedule-agents/
 | 禁同休配對 | `tenant_config.json → no_same_rest` | 不可同日休假的員工配對 |
 | 幹部/領檯指派 | `RULES.md`（Analyzer 自動解析） | 幹部名單 → `habits.json` 的 `is_manager`；領檯指派 → `workstation_skills` 覆蓋 |
 | 包場日期 | `events.json → package_dates` | 手動補充或從 CSV 營運備註自動偵測 |
-| 指定劃休 | `rest_days.json → designated_rest` | 員工指定休假日 |
+| 員工可用性 | `availability.json`（fallback: `rest_days.json`） | FT 指定休假 + PT 可上班時段 |
 | 商業規則 | `RULES.md` | 人類可讀的排班規範（供 Claude 參考決策 + Analyzer 解析角色） |
 
 ### 2.2 tenant_config.json Schema
@@ -148,15 +152,15 @@ schedule-agents/
 ### 3.1 推薦：使用 run.py（統一 CLI）
 
 ```bash
-# 單一租戶完整 pipeline（產出自動寫入 tenants/glod-pig/output/）
-python scripts/run.py --tenant glod-pig --week 2026-03-02
+# 單一租戶完整 pipeline（產出自動寫入 tenants/<tenant>/output/）
+python scripts/run.py --tenant <tenant> --week 2026-03-02
 
 # 只跑某一步驟
-python scripts/run.py --tenant glod-pig --week 2026-03-02 --step scheduler
+python scripts/run.py --tenant <tenant> --week 2026-03-02 --step scheduler
 
 # 跨週排班（傳入前週班表）
-python scripts/run.py --tenant glod-pig --week 2026-03-09 \
-  --prev-schedule tenants/glod-pig/output/schedule_20260302.csv
+python scripts/run.py --tenant <tenant> --week 2026-03-09 \
+  --prev-schedule tenants/<tenant>/output/schedule_20260302.csv
 
 # 所有租戶一次跑完
 python scripts/run.py --all-tenants --week 2026-03-02
@@ -165,7 +169,7 @@ python scripts/run.py --all-tenants --week 2026-03-02
 ### 3.2 手動逐步執行
 
 ```bash
-TENANT=glod-pig
+TENANT=<tenant>
 WEEK=2026-03-02
 TENANT_DIR=tenants/$TENANT
 OUT=$TENANT_DIR/output
@@ -197,15 +201,15 @@ python scripts/auditor_tools.py \
 
 ```bash
 # 第二週排班時，傳入前週班表做跨週約束
-python scripts/run.py --tenant glod-pig --week 2026-03-09 \
-  --prev-schedule tenants/glod-pig/output/schedule_20260302.csv
+python scripts/run.py --tenant <tenant> --week 2026-03-09 \
+  --prev-schedule tenants/<tenant>/output/schedule_20260302.csv
 ```
 
 ### 3.4 閉環：Auditor → Scheduler 迭代
 
 若 Auditor 回報 P0 / P1 違規，應：
 1. 分析 `tenants/<t>/output/audit_<YYYYMMDD>_<TIMESTAMP>.json` 中的 violations
-2. 調整 `tenant_config.json` 的 constraints 或 `rest_days.json`
+2. 調整 `tenant_config.json` 的 constraints 或 `availability.json`
 3. 重新執行 Scheduler → Auditor
 4. 重複直到 P0 = 0、P1 可接受
 
@@ -278,5 +282,7 @@ data_loader.py ← 被所有腳本 import
 | 稽核班表合規性 | `skills/auditor/SKILL.md` | `auditor_tools.py` |
 | 分析店面人力需求分布 | — | `demand_shift_analysis.py` |
 | 新增一個租戶 | 本文件 §4 | 手動建立 + `analyzer.py` 驗證 |
+| 調優排班權重 | `skills/weight-tuner/SKILL.md` | `run.py --sweep` |
 | 調整排班規則 | `tenants/<t>/RULES.md` + `tenant_config.json` | 重跑 Scheduler |
-| 員工指定休假 | `tenants/<t>/rest_days.json` | 重跑 Scheduler |
+| 搜集員工可用性 | `skills/availability/SKILL.md` | 編輯 `availability.json` → 重跑 Scheduler |
+| 員工指定休假 | `tenants/<t>/availability.json`（或 `rest_days.json`） | 重跑 Scheduler |

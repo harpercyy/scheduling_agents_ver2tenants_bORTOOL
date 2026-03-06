@@ -46,7 +46,8 @@ The Auditor validates a schedule against four priority layers:
 | `manager_constraints` | `tenant_config.json` | P1: manager early/late coverage |
 | `no_same_rest` | `tenant_config.json` | P1: forbidden same-day rest pairs |
 | `is_manager` | `habits.json` (per employee) | Identifies managers for coverage checks |
-| `designated_rest` | `rest_days.json` | P0: must not schedule on rest days |
+| `designated_rest` | `availability.json`（fallback: `rest_days.json`） | P0: must not schedule on rest days |
+| `pt_availability` | `availability.json` | P0: PT must not exceed declared windows |
 
 ---
 
@@ -150,7 +151,8 @@ python scripts/auditor_tools.py schedule.csv habits.json audit_report.json tenan
 | P0-002 | Min rest between shifts | `tenant_config.json → constraints.min_rest_hours` |
 | P0-003 | Weekly hours ≤ cap | `tenant_config.json → constraints.max_weekly_hours` |
 | P0-004 | Max working days per week | `tenant_config.json → constraints.max_working_days` |
-| P0-005 | No shifts on designated rest days | `rest_days.json` |
+| P0-005 | No shifts on designated rest days | `availability.json`（fallback: `rest_days.json`） |
+| P0-006 | PT not scheduled outside declared windows | `availability.json → pt_availability` |
 
 ### Hard
 | Rule ID | Description |

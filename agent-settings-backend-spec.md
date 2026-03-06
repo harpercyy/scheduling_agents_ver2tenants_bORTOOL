@@ -189,7 +189,8 @@ Identity 層建立完成 → 解鎖後續 Layer 設定
 | `tenant_config.json` | 班次、角色、約束、人力需求 | Scheduler, Auditor, Analyzer |
 | `staff_roles.json` | 員工技能、主管配置、禁同休配對 | Scheduler, Auditor, Analyzer |
 | `events.json` | 包場 / 特殊事件日期 | Scheduler, Auditor |
-| `rest_days.json` | 員工指定劃休（每週更新） | Scheduler, Auditor |
+| `availability.json` | 員工可用性：FT 指定休假 + PT 時段（每週更新） | Scheduler, Auditor |
+| `rest_days.json` | 指定劃休（`availability.json` 的 fallback） | Scheduler, Auditor |
 | `RULES.md` | 商業規則（人類 & AI 可讀） | Claude（決策參考） |
 
 > **詳細 schema**：請參考 `CLAUDE.md` §2.2 或 `tenants/TEMPLATE/tenant_config.json`。

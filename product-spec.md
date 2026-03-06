@@ -56,8 +56,9 @@ tenants/
 ├── TEMPLATE/              ← 空白租戶範本
 │   ├── tenant_config.json ← 班次、角色、約束、人力需求
 │   ├── tenant_config.json ← 班次、角色、約束、主管約束、禁同休
+│   ├── availability.json  ← 員工可用性（FT 指定休假 + PT 時段）
 │   ├── events.json        ← 包場 / 特殊事件
-│   ├── rest_days.json     ← 指定劃休
+│   ├── rest_days.json     ← 指定劃休（availability.json 的 fallback）
 │   └── RULES.md           ← 商業規則（人類 & AI 可讀）
 ├── glod-pig/              ← 金豬 燒肉
 └── nara/                  ← 奈良
