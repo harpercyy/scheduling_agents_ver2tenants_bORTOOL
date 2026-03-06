@@ -197,6 +197,8 @@ def _sweep_worker(args):
             "Hard": summary.get("Hard", 0),
             "P1": summary.get("P1", 0),
             "P2": summary.get("P2", 0),
+            "audit_path": audit_path,
+            "schedule_path": f"{schedule_prefix}.csv",
         }
     except Exception as e:
         return {"label": label, "weights": weights,
@@ -275,7 +277,94 @@ def run_sweep(tenant_dir: str, week_start: str, sweep_path: str,
 
     # Print comparison table
     _print_sweep_table(results)
+
+    # Generate structured report
+    report_path = _generate_sweep_report(results, output_dir, sweep_path)
+    print(f"  Sweep report saved to {report_path}\n")
+
     return True
+
+
+def _load_rule_breakdown(audit_path: str) -> dict:
+    """Load audit JSON and return {rule_id: count} breakdown."""
+    from collections import Counter
+    if not audit_path or not os.path.exists(audit_path):
+        return {}
+    try:
+        with open(audit_path, encoding="utf-8") as f:
+            audit = json.load(f)
+        return dict(Counter(v["rule_id"] for v in audit.get("violations", [])))
+    except Exception:
+        return {}
+
+
+def _generate_sweep_report(results: list, output_dir: str, sweep_path: str) -> str:
+    """Generate a structured sweep comparison report JSON."""
+    now_tag = datetime.now().strftime("%Y%m%d_%H%M%S")
+    report_path = os.path.join(output_dir, f"sweep_report_{now_tag}.json")
+
+    configs = []
+    for r in results:
+        by_rule = _load_rule_breakdown(r.get("audit_path"))
+        configs.append({
+            "label": r["label"],
+            "weights": r["weights"],
+            "summary": {k: r[k] for k in ("P0", "Hard", "P1", "P2")},
+            "by_rule": by_rule,
+            "audit_path": r.get("audit_path", ""),
+            "schedule_path": r.get("schedule_path", ""),
+        })
+
+    # Build comparison diffs (first config = baseline)
+    comparison = {}
+    if len(configs) >= 2:
+        baseline = configs[0]
+        bl_summary = baseline["summary"]
+        bl_rules = baseline["by_rule"]
+        diffs = []
+        for cfg in configs[1:]:
+            c_summary = cfg["summary"]
+            c_rules = cfg["by_rule"]
+
+            # Delta calculation (skip if ERR)
+            delta = {}
+            for k in ("P0", "Hard", "P1", "P2"):
+                bv, cv = bl_summary.get(k, 0), c_summary.get(k, 0)
+                if isinstance(bv, int) and isinstance(cv, int):
+                    delta[k] = cv - bv
+                else:
+                    delta[k] = "ERR"
+
+            all_rules = set(bl_rules) | set(c_rules)
+            improved = [r for r in sorted(all_rules) if c_rules.get(r, 0) < bl_rules.get(r, 0)]
+            regressed = [r for r in sorted(all_rules) if c_rules.get(r, 0) > bl_rules.get(r, 0)]
+            resolved = [r for r in sorted(all_rules) if bl_rules.get(r, 0) > 0 and c_rules.get(r, 0) == 0]
+            new_rules = [r for r in sorted(all_rules) if bl_rules.get(r, 0) == 0 and c_rules.get(r, 0) > 0]
+
+            diffs.append({
+                "label": cfg["label"],
+                "delta": delta,
+                "improved_rules": improved,
+                "regressed_rules": regressed,
+                "resolved_rules": resolved,
+                "new_rules": new_rules,
+            })
+        comparison = {
+            "baseline_label": baseline["label"],
+            "diffs": diffs,
+        }
+
+    report = {
+        "generated_at": datetime.now().isoformat(),
+        "sweep_config": sweep_path,
+        "configs": configs,
+        "comparison": comparison,
+    }
+
+    with open(report_path, "w", encoding="utf-8") as f:
+        json.dump(report, f, ensure_ascii=False, indent=2)
+
+    return report_path
 
 
 def _print_sweep_table(results: list):
@@ -314,6 +403,34 @@ def _print_sweep_table(results: list):
               f"{fmt(p1)}  {fmt(p2)}  {str(total).rjust(5)}")
 
     print(f"  {sep}")
+
+    # Rule breakdown table
+    all_breakdowns = {}
+    for r in results:
+        bd = _load_rule_breakdown(r.get("audit_path"))
+        all_breakdowns[r["label"]] = bd
+
+    all_rule_ids = sorted(set(rid for bd in all_breakdowns.values() for rid in bd))
+    if all_rule_ids:
+        rw = max(len(rid) for rid in all_rule_ids)
+        rw = max(rw, 7)  # min width for "Rule ID"
+
+        rule_header = f"{'Rule ID'.ljust(rw)}"
+        for r in results:
+            rule_header += f"  {r['label']:>{lw}}"
+        rule_sep = "\u2500" * len(rule_header)
+
+        print(f"\n  Rule Breakdown:")
+        print(f"  {rule_header}")
+        print(f"  {rule_sep}")
+        for rid in all_rule_ids:
+            row = f"  {rid.ljust(rw)}"
+            for r in results:
+                cnt = all_breakdowns[r["label"]].get(rid, 0)
+                row += f"  {cnt:>{lw}}"
+            print(row)
+        print(f"  {rule_sep}")
+
     print()
 
 
