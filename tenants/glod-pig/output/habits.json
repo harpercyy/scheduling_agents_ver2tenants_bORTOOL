@@ -4,7 +4,7 @@
     "chinese_name": "林靜宜",
     "english_name": "Sherry",
     "preferred_shifts": [
-      "B106"
+      "B104"
     ],
     "available_hour_range": null,
     "overtime_willingness": null,
@@ -17,7 +17,7 @@
     "avg_weekly_hours": 0.0,
     "avg_shifts_per_week": 0.0,
     "shift_frequency": {
-      "B106": 2
+      "B104": 2
     },
     "workstation_frequency": {
       "烤手": 2
@@ -28,13 +28,15 @@
     "chinese_name": "李基雨",
     "english_name": "Kiwoo",
     "preferred_shifts": [
-      "B004"
+      "afternoon",
+      "morning",
+      "evening"
     ],
     "available_hour_range": null,
     "overtime_willingness": null,
     "rotation_flexibility": null,
     "workstation_skills": [
-      "烤手"
+      "服務"
     ],
     "employee_type": "ft",
     "is_manager": false,
