@@ -11,21 +11,24 @@ schedule-agents/
 ├── CLAUDE.md                          ← 你正在讀的這份（頂層導航）
 ├── product-spec.md                    ← 產品規格書（概念層）
 ├── agent-settings-backend-spec.md     ← 設定後台規格（Layer 0-6 架構）
+├── data_loader_interface.md           ← 資料載入器介面文件
+├── web-ui-plan.md                     ← Web UI 規劃文件
 │
 ├── scripts/                           ← 五支核心腳本
 │   ├── run.py                         ← 統一 CLI（--tenant / --all-tenants）
 │   ├── data_loader.py                 ← 資料模型 + CSV 解析器 registry
-│   ├── analyzer.py                    ← Analyzer Agent：身份識別 + 習慣計算
-│   ├── demand_shift_analysis.py       ← 需求分析：四情境 × 角色 × 班次代碼
-│   ├── ortools_solver.py              ← Scheduler Agent：CP-SAT 排班求解器
-│   └── auditor_tools.py               ← Auditor Agent：P0/Hard/P1/P2 稽核
+│   ├── analyzer.py                    ← Analyzer Skill：身份識別 + 習慣計算
+│   ├── demand_shift_analysis.py       ← Demand Shift Analysis Skill：四情境 × 角色 × 班次代碼
+│   ├── ortools_solver.py              ← Scheduler Skill：CP-SAT 排班求解器
+│   └── auditor_tools.py               ← Auditor Skill：P0/Hard/P1/P2 稽核
 │
-├── skills/                            ← 各 Agent 的操作手冊
-│   ├── analyzer/SKILL.md
-│   ├── scheduler/SKILL.md
-│   ├── auditor/SKILL.md
-│   ├── availability/SKILL.md
-│   └── weight-tuner/SKILL.md
+├── skills/                            ← 各 Skill 的操作手冊
+│   ├── analyzer/SKILL.md              ← 歷史班表分析 → habits.json
+│   ├── scheduler/SKILL.md             ← CP-SAT 排班求解
+│   ├── auditor/SKILL.md               ← 班表合規稽核（P0/Hard/P1/P2）
+│   ├── availability/SKILL.md          ← 員工可用性搜集 → availability.json
+│   ├── weight-tuner/SKILL.md          ← 排班權重掃描與調優
+│   └── tenant-onboarding/SKILL.md     ← 新租戶建立互動式引導
 │
 └── tenants/                           ← 多租戶目錄（每店一個子資料夾）
     ├── TEMPLATE/                      ← 空白租戶範本（複製此目錄建立新租戶）
@@ -35,9 +38,10 @@ schedule-agents/
     │   ├── rest_days.json             ← 指定劃休（availability.json 的 fallback）
     │   ├── line_name_map.json         ← LINE 顯示名稱 → employee_id（Phase 2 用）
     │   ├── RULES.md                   ← 店面商業規則（Analyzer 解析幹部/領檯 + Claude 決策參考）
+    │   ├── weight_sweep.json          ← 權重掃描設定（weight-tuner 用）
     │   └── output/                    ← 所有產出檔（自動建立）
-    ├── glod-pig/                      ← 金豬 燒肉（現有租戶）
-    └── nara/                          ← 奈良（待建立）
+    ├── glod-pig/                      ← 金豬食堂（現有租戶）
+    └── john-tea-company/              ← 約翰紅茶示範門市（現有租戶）
 ```
 
 ---
@@ -70,7 +74,7 @@ schedule-agents/
 ```json
 {
   "tenant_id": "glod-pig",
-  "display_name": "金豬 燒肉",
+  "display_name": "金豬食堂",
   "region": "TW",
   "timezone": "Asia/Taipei",
 
@@ -144,6 +148,8 @@ schedule-agents/
 | `manager_constraints` | ⬚ | 主管排班約束（含 `early_hour_threshold`、`late_hour_threshold` 回退判斷），無主管制度可省略 |
 | `no_same_rest` | ⬚ | 禁同休配對 `{ pairs: [[id_a, id_b], ...] }`，無則省略 |
 | `csv_parser` | ⬚ | CSV 解析器 ID，預設 `"generic"` |
+| `csv_code_aliases` | ⬚ | CSV 班次代碼別名 `{ csv_code: [shift_defs_code, ...] }`，CSV 代碼與 shift_defs 不一致時使用 |
+| `min_role_per_day` | ⬚ | 各角色每日最低人數 `{ role: min_count }`，無則省略 |
 
 ---
 
@@ -164,6 +170,14 @@ python scripts/run.py --tenant <tenant> --week 2026-03-09 \
 
 # 所有租戶一次跑完
 python scripts/run.py --all-tenants --week 2026-03-02
+
+# 權重掃描（weight sweep）
+python scripts/run.py --tenant <tenant> --week 2026-03-09 \
+  --sweep tenants/<tenant>/weight_sweep.json
+
+# 並行權重掃描（N 個 worker）
+python scripts/run.py --tenant <tenant> --week 2026-03-09 \
+  --sweep tenants/<tenant>/weight_sweep.json --parallel 4
 ```
 
 ### 3.2 手動逐步執行
@@ -234,9 +248,9 @@ cp -r tenants/TEMPLATE tenants/<new-tenant>
 #    - 列出領檯早/晚班指派（Analyzer 會自動解析 → workstation_skills 覆蓋）
 #    - 寫下其他排班商業規則（供 Claude 參考決策）
 
-# 5. 放入歷史班表 CSV
+# 4. 放入歷史班表 CSV（或 PDF，需手動建立 habits.json）
 
-# 6. 執行 Pipeline 驗證
+# 5. 執行 Pipeline 驗證
 python scripts/analyzer.py tenants/<new-tenant>/ habits.json
 ```
 
@@ -248,7 +262,7 @@ python scripts/analyzer.py tenants/<new-tenant>/ habits.json
 data_loader.py ← 被所有腳本 import
     │
     ├── analyzer.py          (imports: data_loader)
-    ├── demand_shift_analysis.py (imports: data_loader)
+    ├── demand_shift_analysis.py (imports: data_loader, data_loader.parse_roster_csv)
     ├── ortools_solver.py    (imports: data_loader)
     └── auditor_tools.py     (imports: data_loader, ortools_solver)
 ```
@@ -281,7 +295,7 @@ data_loader.py ← 被所有腳本 import
 | 產出新一週班表 | `skills/scheduler/SKILL.md` | `ortools_solver.py` |
 | 稽核班表合規性 | `skills/auditor/SKILL.md` | `auditor_tools.py` |
 | 分析店面人力需求分布 | — | `demand_shift_analysis.py` |
-| 新增一個租戶 | 本文件 §4 | 手動建立 + `analyzer.py` 驗證 |
+| 新增一個租戶 | `skills/tenant-onboarding/SKILL.md` | 互動式引導 + `analyzer.py` 驗證 |
 | 調優排班權重 | `skills/weight-tuner/SKILL.md` | `run.py --sweep` |
 | 調整排班規則 | `tenants/<t>/RULES.md` + `tenant_config.json` | 重跑 Scheduler |
 | 搜集員工可用性 | `skills/availability/SKILL.md` | 編輯 `availability.json` → 重跑 Scheduler |

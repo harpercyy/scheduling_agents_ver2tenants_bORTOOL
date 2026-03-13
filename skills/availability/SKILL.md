@@ -1,3 +1,8 @@
+---
+name: availability
+description: Collect employee availability for scheduling. FT employees declare rest days, PT employees declare available date+time windows. Produces availability.json consumed by solver (HC13) and auditor (P0-006). Supports fallback to rest_days.json.
+---
+
 # Availability Collection — SKILL.md
 
 > **前置條件**：先讀取 `CLAUDE.md` 了解多租戶架構。

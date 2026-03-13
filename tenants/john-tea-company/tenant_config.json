@@ -1,0 +1,55 @@
+{
+  "tenant_id": "john-tea-company",
+  "display_name": "約翰紅茶示範門市",
+  "region": "TW",
+  "timezone": "Asia/Taipei",
+
+  "shift_defs": {
+    "S01": { "start": "10:00", "end": "19:00", "hours": 8 },
+    "S02": { "start": "11:00", "end": "20:00", "hours": 8 },
+    "S03": { "start": "12:00", "end": "21:00", "hours": 8 }
+  },
+
+  "workstation_roles": {
+    "S01": "門市夥伴",
+    "S02": "門市夥伴",
+    "S03": "門市夥伴"
+  },
+
+  "scenarios": ["平日", "平日包場", "週末", "週末包場"],
+
+  "min_daily_headcount": {
+    "weekday": 2,
+    "saturday": 3,
+    "sunday": 3,
+    "package": 0
+  },
+
+  "coverage_targets": {},
+
+  "constraints": {
+    "min_rest_hours": 11,
+    "max_weekly_hours": 46,
+    "max_working_days": 5,
+    "std_weekly_hours": 40,
+    "max_consecutive_working_days": 4,
+    "no_overtime_max_shifts": 5,
+    "pt_min_shift_hour": 11
+  },
+
+  "manager_constraints": {
+    "daily_early_count": 0,
+    "daily_late_count": 0,
+    "early_shifts": [],
+    "late_shifts": [],
+    "exclude_from_headcount": false,
+    "early_hour_threshold": 12,
+    "late_hour_threshold": 14
+  },
+
+  "no_same_rest": {
+    "pairs": [["1", "2"]]
+  },
+
+  "csv_parser": "john_tea_v1"
+}

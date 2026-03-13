@@ -1,0 +1,6 @@
+{
+  "_comment": "每週可用性搜集。FT: 指定休假日期。PT: 可上班日期+時間區段。未列日期的 PT 員工視為該日不可上班。",
+  "week": "",
+  "designated_rest": {},
+  "pt_availability": {}
+}

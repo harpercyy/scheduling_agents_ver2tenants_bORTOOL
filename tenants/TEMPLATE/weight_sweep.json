@@ -1,0 +1,14 @@
+[
+  {
+    "label": "baseline",
+    "weights": {}
+  },
+  {
+    "label": "high_pref",
+    "weights": {"W_PREF": 30, "W_SHIFT": 15}
+  },
+  {
+    "label": "high_fairness",
+    "weights": {"W_FAIRNESS": 40}
+  }
+]
