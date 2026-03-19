@@ -54,7 +54,7 @@ schedule-agents/
 
 | 層級 | 來源 | 說明 |
 |------|------|------|
-| 班次定義 (`SHIFT_DEFS`) | `tenant_config.json → shift_defs` | 每店的班次代碼、時間、工時不同 |
+| 班次定義 (`SHIFT_DEFS`) | `tenant_config.json → shift_defs` | FT 固定班次；PT 可由 `pt_shift_generation` 自動產生 |
 | 角色對應 (`WORKSTATION_ROLE_MAP`) | `tenant_config.json → workstation_roles` | 烤手 / 領檯 是 glod-pig 的角色名稱，其他店不同 |
 | 每日最低人力 | `tenant_config.json → min_daily_headcount` | 平日 / 週六 / 週日 / 包場 各有不同門檻 |
 | 情境分類 | `tenant_config.json → scenarios` | 預設四種，可自訂 |
@@ -139,12 +139,13 @@ schedule-agents/
 | `display_name` | ✅ | 顯示用名稱 |
 | `region` | ✅ | 地區代碼，決定假日表（`TW` / `JP` / `US` / ...） |
 | `timezone` | ✅ | IANA 時區 |
-| `shift_defs` | ✅ | 所有班次定義 `{ code: { start, end, hours } }` |
+| `shift_defs` | ✅ | 所有班次定義 `{ code: { start, end, hours } }`（FT 班次手動定義，PT 可由 `pt_shift_generation` 自動產生） |
 | `workstation_roles` | ✅ | 班次代碼 → 崗位角色的對應表 |
 | `scenarios` | ⬚ | 情境名稱列表，**順序固定**：`[weekday, weekday+package, weekend, weekend+package]`，預設 `["平日", "平日包場", "週末", "週末包場"]` |
 | `min_daily_headcount` | ⬚ | 各情境最低人力，預設全 0（不強制） |
-| `coverage_targets` | ⬚ | 按班次開始時間的最低人力需求（稽核用），`{ "HH:MM": { min, label } }`，無則省略 |
-| `constraints` | ⬚ | 勞動約束覆寫（含 `max_consecutive_working_days`、`no_overtime_max_shifts`、`pt_min_shift_hour`），未設定則用預設值 |
+| `coverage_targets` | ⬚ | 時段最低人力需求。支援兩種模式：(1) 前綴比對（預設）`{ "HH:MM": { min, label } }`；(2) 時間點覆蓋 `{ "HH:MM": { min, label, match: "active_at" } }` — 計算在該時間點 active 的所有班次（`start ≤ T < end`） |
+| `constraints` | ⬚ | 勞動約束覆寫，含 `ft_min_shift_hours`（FT 最低班次時數）、`min_ft_per_day`（每日最低正職人數），未設定則用預設值 |
+| `pt_shift_generation` | ⬚ | PT 班次自動產生設定 `{ earliest_start, latest_end, granularity_minutes, min_hours, max_hours, role }`，Solver 啟動時自動產生所有合法 PT 班次，無則省略 |
 | `manager_constraints` | ⬚ | 主管排班約束（含 `early_hour_threshold`、`late_hour_threshold` 回退判斷），無主管制度可省略 |
 | `no_same_rest` | ⬚ | 禁同休配對 `{ pairs: [[id_a, id_b], ...] }`，無則省略 |
 | `csv_parser` | ⬚ | CSV 解析器 ID，預設 `"generic"` |

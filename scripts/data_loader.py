@@ -112,6 +112,7 @@ class TenantConfig:
     no_same_rest: list = field(default_factory=list)  # [[id_a, id_b], ...] from tenant_config.json
     region_holidays: set = field(default_factory=set)  # populated by load_tenant_config
     coverage_targets: dict = field(default_factory=dict)  # {time: {min, label}} for auditor
+    pt_shift_generation: dict = field(default_factory=dict)  # auto-gen PT shifts config
 
 
 def load_tenant_config(tenant_dir: str) -> TenantConfig:
@@ -171,6 +172,9 @@ def load_tenant_config(tenant_dir: str) -> TenantConfig:
     else:
         no_same_rest = []
 
+    # Load pt_shift_generation (optional, for auto-generated PT shifts)
+    pt_shift_generation = data.get("pt_shift_generation") or {}
+
     config = TenantConfig(
         tenant_id=data["tenant_id"],
         display_name=data["display_name"],
@@ -188,6 +192,7 @@ def load_tenant_config(tenant_dir: str) -> TenantConfig:
         no_same_rest=no_same_rest,
         region_holidays=holidays,
         coverage_targets=coverage_targets,
+        pt_shift_generation=pt_shift_generation,
     )
 
     print(f"📋 租戶設定: {config.display_name} ({config.tenant_id})")

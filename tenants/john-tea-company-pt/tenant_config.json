@@ -1,0 +1,77 @@
+{
+  "_doc": "約翰紅茶南港門市 — FT 固定班次 + PT 自動產生彈性班次",
+
+  "tenant_id": "john-tea-company-pt",
+  "display_name": "約翰紅茶 南港門市",
+  "region": "TW",
+  "timezone": "Asia/Taipei",
+
+  "shift_defs": {
+    "_doc": "FT 固定班次。PT 班次由 pt_shift_generation 自動產生。",
+    "F01": { "start": "09:00", "end": "18:00", "hours": 8 },
+    "F02": { "start": "10:00", "end": "19:00", "hours": 8 },
+    "F03": { "start": "11:00", "end": "20:00", "hours": 8 },
+    "F04": { "start": "12:30", "end": "21:30", "hours": 8 }
+  },
+
+  "workstation_roles": {
+    "_doc": "班次代碼 → 崗位角色對應。PT 自動產生的班次也會對應到 pt_shift_generation.role。",
+    "F01": "門市夥伴",
+    "F02": "門市夥伴",
+    "F03": "門市夥伴",
+    "F04": "門市夥伴"
+  },
+
+  "pt_shift_generation": {
+    "_doc": "PT 班次自動產生設定。Solver 啟動時依此參數產生所有合法 PT 班次。",
+    "earliest_start": "09:00",
+    "latest_end": "21:30",
+    "granularity_minutes": 30,
+    "min_hours": 3,
+    "max_hours": 8,
+    "role": "門市夥伴"
+  },
+
+  "scenarios": ["平日", "平日包場", "週末", "週末包場"],
+
+  "min_daily_headcount": {
+    "weekday": 4,
+    "saturday": 5,
+    "sunday": 5,
+    "package": 0
+  },
+
+  "coverage_targets": {
+    "_doc": "時間點覆蓋約束。match=active_at 表示班次在該時間點 active (start ≤ T < end)。",
+    "09:00": { "min": 2, "label": "開門班", "match": "active_at" },
+    "21:00": { "min": 2, "label": "打烊班", "match": "active_at" }
+  },
+
+  "constraints": {
+    "min_rest_hours": 11,
+    "max_weekly_hours": 46,
+    "max_working_days": 5,
+    "std_weekly_hours": 40,
+    "max_consecutive_working_days": 4,
+    "no_overtime_max_shifts": 5,
+    "pt_min_shift_hour": 9,
+    "ft_min_shift_hours": 8,
+    "min_ft_per_day": 2,
+    "daily_total_hours_min": 30,
+    "daily_total_hours_max": 40
+  },
+
+  "manager_constraints": {
+    "daily_early_count": 0,
+    "daily_late_count": 0,
+    "early_shifts": [],
+    "late_shifts": [],
+    "exclude_from_headcount": false
+  },
+
+  "no_same_rest": {
+    "pairs": []
+  },
+
+  "csv_parser": "generic"
+}

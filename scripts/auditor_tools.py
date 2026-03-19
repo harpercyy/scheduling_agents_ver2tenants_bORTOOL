@@ -349,13 +349,54 @@ def check_p1_tenant_rules(entries: list, coverage_targets: dict = None,
 
     by_date_shift = group_by_date_shift(entries)
 
+    # Separate active_at targets from prefix-match targets
+    active_at_targets = {}
+    prefix_targets = {}
+    for target_time, rules in coverage_targets.items():
+        if rules.get("match") == "active_at":
+            active_at_targets[target_time] = rules
+        else:
+            prefix_targets[target_time] = rules
+
+    # P1-001a: active_at mode — count all shifts active at target time point
+    if active_at_targets:
+        by_date = defaultdict(list)
+        for e in entries:
+            if not e.get("leave_type"):
+                by_date[e["date"]].append(e)
+        for date, day_entries in sorted(by_date.items()):
+            for target_time, rules in active_at_targets.items():
+                min_staff = rules.get("min", 1)
+                label = rules.get("label", target_time)
+                tp = target_time.split(":")
+                t_minutes = int(tp[0]) * 60 + int(tp[1])
+                count = 0
+                for e in day_entries:
+                    s_start = parse_time(e.get("shift_start", ""))
+                    s_end = parse_time(e.get("shift_end", ""))
+                    if s_start >= 0 and s_end >= 0:
+                        if s_end <= s_start:
+                            s_end += 24 * 60
+                        if s_start <= t_minutes < s_end:
+                            count += 1
+                if count < min_staff:
+                    violations.append(Violation(
+                        priority="P1",
+                        rule_id="P1-001",
+                        description=(f"{date} {label} 人力不足："
+                                     f"需要 {min_staff} 人，僅有 {count} 人"),
+                        date=date,
+                        suggestion=f"增派 {min_staff - count} 名員工至 {label}",
+                    ))
+
+    # P1-001b: prefix-match mode (legacy)
     for (date, shift_start), slot_entries in by_date_shift.items():
         if not shift_start:
             continue
         working = [e for e in slot_entries if not e.get("leave_type")]
         count = len(working)
 
-        for target_time, rules in coverage_targets.items():
+        for target_time, rules in prefix_targets.items():
             # Match shift time prefix
             if shift_start.startswith(target_time[:2]):
                 min_staff = rules.get("min", 1)

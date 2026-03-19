@@ -345,12 +345,17 @@ class DemandScheduleSolver:
         self.num_days = 7
         self.num_employees = len(habits)
 
+        # Auto-generate PT shifts if configured
+        self._generate_pt_shifts()
+
         # Build the full list of shift codes used across all scenarios
         all_codes = set()
         for scenario_profile in demand_profile.values():
             for role, code_counts in scenario_profile.items():
                 for code in code_counts:
                     all_codes.add(code)
+        # Also include all shift_defs (covers auto-generated PT shifts)
+        all_codes.update(self.shift_defs.keys())
         self.shift_codes = sorted(all_codes)
         self.num_shifts = len(self.shift_codes)
         self.sc_idx = {sc: i for i, sc in enumerate(self.shift_codes)}
@@ -364,6 +369,15 @@ class DemandScheduleSolver:
             scen = get_scenario(date_str, self.package_dates, self.holidays, scenarios)
             self.day_scenarios.append(scen)
             self.day_requirements.append(get_day_requirements(scen, demand_profile))
+
+        # Detect closure days (all employees have designated rest)
+        self.closure_days = set()
+        for d in range(self.num_days):
+            if all(d in self.rest_days.get(h.employee_id, set())
+                   for h in habits):
+                self.closure_days.add(d)
+        if self.closure_days:
+            print(f"   🔒 公休日: {sorted(self.closure_days)} (所有員工休假)")
 
         self.model = cp_model.CpModel()
         self.vars = {}  # vars[e][d][sc_idx]
@@ -434,6 +448,43 @@ class DemandScheduleSolver:
                 return True
         # Default: treat unknown strings as shift codes
         return True
+
+    def _generate_pt_shifts(self):
+        """Auto-generate PT shift codes from pt_shift_generation config.
+        Produces all (start, end) combos at the configured granularity,
+        with duration in [min_hours, max_hours]. Injects into shift_defs
+        and workstation_roles."""
+        cfg = self.tenant_config.pt_shift_generation if self.tenant_config else {}
+        if not cfg:
+            return
+
+        def _parse_hhmm(s):
+            parts = s.split(":")
+            return int(parts[0]) * 60 + int(parts[1])
+
+        start_m = _parse_hhmm(cfg["earliest_start"])
+        end_m = _parse_hhmm(cfg["latest_end"])
+        gran = cfg.get("granularity_minutes", 30)
+        min_dur = int(cfg["min_hours"] * 60)
+        max_dur = int(cfg["max_hours"] * 60)
+        role = cfg.get("role", "門市夥伴")
+
+        count = 0
+        for s in range(start_m, end_m, gran):
+            for e in range(s + min_dur, min(s + max_dur, end_m) + 1, gran):
+                code = f"PT_{s//60:02d}{s%60:02d}_{e//60:02d}{e%60:02d}"
+                self.shift_defs[code] = {
+                    "start": f"{s//60:02d}:{s%60:02d}",
+                    "end": f"{e//60:02d}:{e%60:02d}",
+                    "hours": (e - s) / 60,
+                }
+                self.workstation_roles[code] = role
+                count += 1
+
+        if count > 0:
+            print(f"   🔧 PT 班次自動產生: {count} 個 "
+                  f"({cfg['earliest_start']}–{cfg['latest_end']}, "
+                  f"{cfg['min_hours']}–{cfg['max_hours']}h, {gran}min 粒度)")
 
     def build_variables(self):
         for e in range(self.num_employees):
@@ -668,11 +719,142 @@ class DemandScheduleSolver:
                         if s_start < avail_start or s_end > avail_end:
                             self.model.Add(self.vars[e][d][i] == 0)
 
+        # HC14: Time-point coverage constraints (active_at mode)
+        self._add_timepoint_coverage_constraints(relax_level)
+
+        # HC15: FT/PT shift separation when pt_shift_generation is active
+        # FT can only take non-PT shifts (>= ft_min_shift_hours)
+        # PT can only take PT_* auto-generated shifts
+        has_pt_gen = bool(self.tenant_config and self.tenant_config.pt_shift_generation)
+        ft_min = 0
+        if self.tenant_config:
+            ft_min = self.tenant_config.constraints.get("ft_min_shift_hours", 0)
+        if ft_min > 0 or has_pt_gen:
+            for e, habit in enumerate(self.habits):
+                for i, sc in enumerate(self.shift_codes):
+                    is_pt_shift = sc.startswith("PT_")
+                    block = False
+                    if habit.employee_type == "ft" and is_pt_shift:
+                        block = True  # FT cannot take PT shifts
+                    elif habit.employee_type == "pt" and has_pt_gen and not is_pt_shift:
+                        block = True  # PT cannot take FT shifts when auto-gen is active
+                    if block:
+                        for d in range(self.num_days):
+                            self.model.Add(self.vars[e][d][i] == 0)
+
+        # HC16: Minimum FT employees per day (skip closure days)
+        min_ft = 0
+        if self.tenant_config:
+            min_ft = self.tenant_config.constraints.get("min_ft_per_day", 0)
+        if min_ft > 0:
+            for d in range(self.num_days):
+                if d in self.closure_days:
+                    continue
+                ft_working = []
+                for e, habit in enumerate(self.habits):
+                    if habit.employee_type == "ft":
+                        ft_working.extend(
+                            self.vars[e][d][i] for i in range(self.num_shifts)
+                        )
+                if ft_working:
+                    self.model.Add(sum(ft_working) >= min_ft)
+
+        # HC17: Daily total hours band (min/max)
+        daily_h_min = 0
+        daily_h_max = 0
+        if self.tenant_config:
+            daily_h_min = self.tenant_config.constraints.get("daily_total_hours_min", 0)
+            daily_h_max = self.tenant_config.constraints.get("daily_total_hours_max", 0)
+        if daily_h_min > 0 or daily_h_max > 0:
+            for d in range(self.num_days):
+                if d in self.closure_days:
+                    continue
+                # Sum hours × 10 (integer) for all employees on this day
+                day_hours_x10 = sum(
+                    self.vars[e][d][i] * int(self._shift_hours(sc) * 10)
+                    for e in range(self.num_employees)
+                    for i, sc in enumerate(self.shift_codes)
+                )
+                if daily_h_max > 0:
+                    if relax_level == 0:
+                        self.model.Add(day_hours_x10 <= int(daily_h_max * 10))
+                    else:
+                        over = self.model.NewIntVar(
+                            0, self.num_employees * 100,
+                            f"dh_over_{d}")
+                        self.model.Add(over >= day_hours_x10 - int(daily_h_max * 10))
+                        if not hasattr(self, '_headcount_penalties'):
+                            self._headcount_penalties = []
+                        self._headcount_penalties.append(
+                            (over, self.weights["W_HEADCOUNT"]))
+                if daily_h_min > 0:
+                    if relax_level == 0:
+                        self.model.Add(day_hours_x10 >= int(daily_h_min * 10))
+                    else:
+                        under = self.model.NewIntVar(
+                            0, self.num_employees * 100,
+                            f"dh_under_{d}")
+                        self.model.Add(under >= int(daily_h_min * 10) - day_hours_x10)
+                        if not hasattr(self, '_headcount_penalties'):
+                            self._headcount_penalties = []
+                        self._headcount_penalties.append(
+                            (under, self.weights["W_HEADCOUNT"]))
+
         # HC10: Minimum daily per-role coverage (e.g., 領檯早 >= 1, 領檯晚 >= 1)
         self._add_role_coverage_constraints(relax_level)
 
         # HC8: Minimum daily headcount
         self._add_headcount_constraints(relax_level)
+
+    def _add_timepoint_coverage_constraints(self, relax_level: int = 0):
+        """HC14: Time-point coverage constraints.
+        For each coverage_target with match='active_at', find all shifts active
+        at that time point (start <= T < end) and require >= min staff."""
+        if not self.tenant_config or not self.tenant_config.coverage_targets:
+            return
+
+        W_HEADCOUNT = self.weights["W_HEADCOUNT"]
+
+        for target_time, rules in self.tenant_config.coverage_targets.items():
+            if rules.get("match") != "active_at":
+                continue
+            min_staff = rules.get("min", 1)
+            label = rules.get("label", target_time)
+
+            # Parse target time to minutes
+            tp = target_time.split(":")
+            t_minutes = int(tp[0]) * 60 + int(tp[1])
+
+            # Find shift indices active at this time point
+            active_indices = []
+            for i, sc in enumerate(self.shift_codes):
+                s_start = self._shift_start_minutes(sc)
+                s_end = self._shift_end_minutes(sc)
+                if s_start <= t_minutes < s_end:
+                    active_indices.append(i)
+
+            if not active_indices:
+                print(f"   ⚠️ HC14: 時間點 {target_time} ({label}) 無對應 active 班次")
+                continue
+
+            for d in range(self.num_days):
+                if d in self.closure_days:
+                    continue  # skip closure days
+                total = sum(
+                    self.vars[e][d][i]
+                    for e in range(self.num_employees)
+                    for i in active_indices
+                )
+                if relax_level == 0:
+                    self.model.Add(total >= min_staff)
+                else:
+                    deficit = self.model.NewIntVar(
+                        0, self.num_employees,
+                        f"tp_deficit_{target_time.replace(':', '')}_{d}")
+                    self.model.Add(deficit >= min_staff - total)
+                    if not hasattr(self, '_headcount_penalties'):
+                        self._headcount_penalties = []
+                    self._headcount_penalties.append((deficit, W_HEADCOUNT))
 
     def _add_role_coverage_constraints(self, relax_level: int = 0):
         """Add minimum daily per-role coverage constraints (HC10).
@@ -698,6 +880,8 @@ class DemandScheduleSolver:
                 continue
 
             for d in range(self.num_days):
+                if d in self.closure_days:
+                    continue
                 role_staff = sum(
                     self.vars[e][d][i]
                     for e in range(self.num_employees)
@@ -742,6 +926,8 @@ class DemandScheduleSolver:
                                if e not in exclude_from_hc]
 
         for d in range(self.num_days):
+            if d in self.closure_days:
+                continue
             date_str = self._date_for_day(d)
             dt = self.week_start + timedelta(days=d)
             is_pkg = date_str in self.package_dates
@@ -781,8 +967,11 @@ class DemandScheduleSolver:
         """
         For each day, for each required shift code, ensure total assigned >= required.
         If relax=True, only enforce >= 1 (minimum viable).
+        Closure days are skipped entirely.
         """
         for d in range(self.num_days):
+            if d in self.closure_days:
+                continue
             reqs = self.day_requirements[d]
             # Combine requirements by shift_code (sum across roles for same code)
             code_required = defaultdict(int)
@@ -809,6 +998,8 @@ class DemandScheduleSolver:
 
         # ── SC1: Demand coverage (penalize both shortage and overstaffing) ──
         for d in range(self.num_days):
+            if d in self.closure_days:
+                continue
             reqs = self.day_requirements[d]
             code_required = defaultdict(int)
             for req in reqs:
@@ -833,9 +1024,10 @@ class DemandScheduleSolver:
                 penalties.append((surplus, W_FAIRNESS))
 
             # Penalize assigning shifts that have zero demand on this day
+            # Skip auto-generated PT shifts (PT_*) — they serve coverage, not demand
             codes_with_demand = {sc for sc, r in code_required.items() if r > 0}
             for i, sc in enumerate(self.shift_codes):
-                if sc not in codes_with_demand:
+                if sc not in codes_with_demand and not sc.startswith("PT_"):
                     for e in range(self.num_employees):
                         penalties.append((self.vars[e][d][i], W_VAC))
 
@@ -1069,6 +1261,24 @@ class DemandScheduleSolver:
                     for d in range(self.num_days):
                         for i in non_evening_indices:
                             penalties.append((self.vars[e][d][i], W_PT_EVENING))
+
+        # ── SC9: PT hours incentive — prefer longer PT shifts ──
+        # Reward (negative penalty) proportional to shift hours, so solver fills
+        # the availability window instead of picking minimum-length 3h blocks.
+        W_PT_HOURS = self.weights.get("W_PT_HOURS", 3)
+        if W_PT_HOURS > 0 and any(sc.startswith("PT_") for sc in self.shift_codes):
+            for e, habit in enumerate(self.habits):
+                if habit.employee_type != "pt":
+                    continue
+                for d in range(self.num_days):
+                    if d in self.closure_days:
+                        continue
+                    for i, sc in enumerate(self.shift_codes):
+                        if sc.startswith("PT_"):
+                            hours_x10 = int(self._shift_hours(sc) * 10)
+                            # Negative weight = reward for longer shifts
+                            penalties.append((self.vars[e][d][i],
+                                              -W_PT_HOURS * hours_x10))
 
         return penalties
 
