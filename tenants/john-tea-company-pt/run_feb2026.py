@@ -218,8 +218,24 @@ WEEK4_PT = {
 }
 
 
+def load_rest_days_json() -> dict:
+    """Load rest_days.json and return {employee_id: [date_str, ...]}."""
+    path = os.path.join(TENANT_DIR, "rest_days.json")
+    if not os.path.exists(path):
+        return {}
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+    return data.get("designated_rest", {})
+
+
 def build_availability(week_start: str, closures: list, pt_avail: dict) -> dict:
-    """Build availability.json content for one week."""
+    """Build availability.json content for one week.
+    Merges closure days + FT rest days from rest_days.json."""
+    from datetime import datetime, timedelta
+    ws = datetime.strptime(week_start, "%Y-%m-%d")
+    week_dates = set((ws + timedelta(days=d)).strftime("%Y-%m-%d")
+                     for d in range(7))
+
     designated_rest = {}
 
     # Closure days: all employees rest
@@ -228,6 +244,16 @@ def build_availability(week_start: str, closures: list, pt_avail: dict) -> dict:
             if eid not in designated_rest:
                 designated_rest[eid] = []
             designated_rest[eid].append(date_str)
+
+    # FT rest days from rest_days.json (filter to this week)
+    ft_rest = load_rest_days_json()
+    for eid, dates in ft_rest.items():
+        for date_str in dates:
+            if date_str in week_dates:
+                if eid not in designated_rest:
+                    designated_rest[eid] = []
+                if date_str not in designated_rest[eid]:
+                    designated_rest[eid].append(date_str)
 
     return {
         "week": week_start,

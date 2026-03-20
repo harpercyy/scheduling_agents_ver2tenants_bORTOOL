@@ -486,38 +486,102 @@ class DemandScheduleSolver:
                   f"({cfg['earliest_start']}–{cfg['latest_end']}, "
                   f"{cfg['min_hours']}–{cfg['max_hours']}h, {gran}min 粒度)")
 
+    def _is_valid_assignment(self, e: int, d: int, i: int, sc: str) -> bool:
+        """Check if employee e can be assigned shift sc (index i) on day d.
+        Combines HC5 (skill), HC6 (rest days), HC13 (PT availability),
+        HC15 (FT/PT separation) into a single build-time filter."""
+        habit = self.habits[e]
+
+        # HC6: designated rest day → no shifts
+        if d in self.rest_days.get(habit.employee_id, set()):
+            return False
+
+        # HC15: FT/PT separation
+        has_pt_gen = bool(self.tenant_config and self.tenant_config.pt_shift_generation)
+        is_pt_shift = sc.startswith("PT_")
+        if has_pt_gen:
+            if habit.employee_type == "ft" and is_pt_shift:
+                return False
+            if habit.employee_type == "pt" and not is_pt_shift:
+                return False
+        else:
+            # No pt_shift_generation — check ft_min_shift_hours
+            ft_min = (self.tenant_config.constraints.get("ft_min_shift_hours", 0)
+                      if self.tenant_config else 0)
+            if ft_min > 0 and habit.employee_type == "ft":
+                if self.shift_defs.get(sc, {}).get("hours", 0) < ft_min:
+                    return False
+
+        # HC5: skill match
+        role = shift_code_to_role(sc, self.workstation_roles)
+        if not employee_can_do_shift(habit, sc, role, self.workstation_roles):
+            return False
+
+        # HC13: PT availability window
+        # When pt_shift_generation is active, PT without availability data = unavailable
+        if habit.employee_type == "pt":
+            avail = self.pt_availability.get(habit.employee_id)
+            if avail is None:
+                if has_pt_gen:
+                    return False  # PT must have explicit availability
+                # else: no pt_shift_generation → legacy behavior (allow all)
+            else:
+                if d not in avail:
+                    return False
+                avail_start, avail_end = avail[d]
+                s_start = self._shift_start_minutes(sc)
+                s_end = self._shift_end_minutes(sc)
+                if s_start < avail_start or s_end > avail_end:
+                    return False
+
+        return True
+
     def build_variables(self):
+        total_vars = 0
+        total_possible = self.num_employees * self.num_days * self.num_shifts
         for e in range(self.num_employees):
             self.vars[e] = {}
             for d in range(self.num_days):
                 self.vars[e][d] = {}
                 for i, sc in enumerate(self.shift_codes):
-                    self.vars[e][d][i] = self.model.NewBoolVar(
-                        f"e{e}_d{d}_sc{i}"
-                    )
+                    if self._is_valid_assignment(e, d, i, sc):
+                        self.vars[e][d][i] = self.model.NewBoolVar(
+                            f"e{e}_d{d}_sc{i}"
+                        )
+                        total_vars += 1
+        pruned = total_possible - total_vars
+        print(f"   📊 變數: {total_vars} 個 (原 {total_possible}, 過濾 {pruned}, "
+              f"減少 {pruned/total_possible*100:.0f}%)")
+
+    def _working_sum(self, e: int, d: int):
+        """Sum of all shift variables for employee e on day d."""
+        vals = self.vars[e][d].values()
+        return sum(vals) if vals else 0
+
+    def _shift_sum(self, d: int, i: int, employees=None):
+        """Sum of shift index i across employees on day d. Returns None if no vars."""
+        emps = employees if employees is not None else range(self.num_employees)
+        vars_list = [self.vars[e][d][i] for e in emps if i in self.vars[e][d]]
+        return sum(vars_list) if vars_list else None
 
     def add_hard_constraints(self, relax_level: int = 0):
         # HC1: At most 1 shift per employee per day
         for e in range(self.num_employees):
             for d in range(self.num_days):
-                self.model.AddAtMostOne(
-                    self.vars[e][d][i] for i in range(self.num_shifts)
-                )
+                if self.vars[e][d]:
+                    self.model.AddAtMostOne(self.vars[e][d].values())
 
         # HC2: At most max_working_days per week (一例一休: guarantee 2 rest days)
         max_wd = 5
         if self.tenant_config:
             max_wd = self.tenant_config.constraints.get("max_working_days", 5)
         for e in range(self.num_employees):
-            total_days_worked = sum(
-                self.vars[e][d][i]
-                for d in range(self.num_days)
-                for i in range(self.num_shifts)
-            )
-            self.model.Add(total_days_worked <= max_wd)
+            all_vars = [v for d in range(self.num_days)
+                        for v in self.vars[e][d].values()]
+            if all_vars:
+                self.model.Add(sum(all_vars) <= max_wd)
 
         # HC2b: At least min_working_days per week (if configured)
-        # Only applies to employees who can actually be assigned shifts (skill match exists)
         min_wd = 0
         if self.tenant_config:
             min_wd = self.tenant_config.constraints.get("min_working_days", 0)
@@ -526,13 +590,11 @@ class DemandScheduleSolver:
             for e in range(self.num_employees):
                 emp_skills = set(self.habits[e].workstation_skills or [])
                 if not (emp_skills & available_roles):
-                    continue  # skip employees who can't match any shift
-                total_days_worked = sum(
-                    self.vars[e][d][i]
-                    for d in range(self.num_days)
-                    for i in range(self.num_shifts)
-                )
-                self.model.Add(total_days_worked >= min_wd)
+                    continue
+                all_vars = [v for d in range(self.num_days)
+                            for v in self.vars[e][d].values()]
+                if all_vars:
+                    self.model.Add(sum(all_vars) >= min_wd)
 
         # HC3: Min rest between consecutive shifts (gap-based forbidden pairs)
         min_rest_mins = self.min_rest_hours * 60
@@ -547,7 +609,10 @@ class DemandScheduleSolver:
         for e in range(self.num_employees):
             for d in range(self.num_days - 1):
                 for i, j in forbidden_pairs:
-                    self.model.Add(self.vars[e][d][i] + self.vars[e][d+1][j] <= 1)
+                    vi = self.vars[e][d].get(i)
+                    vj = self.vars[e][d+1].get(j)
+                    if vi is not None and vj is not None:
+                        self.model.Add(vi + vj <= 1)
 
         # HC3-cross: Forbid day-0 shifts that violate min rest with prev week's last shift
         if self.prev_tail:
@@ -557,36 +622,24 @@ class DemandScheduleSolver:
                     continue
                 prev_end = self._shift_end_minutes(tail["last_shift"])
                 for j, sc_j in enumerate(self.shift_codes):
+                    vj = self.vars[e][0].get(j)
+                    if vj is None:
+                        continue
                     start_j = self._shift_start_minutes(sc_j)
                     gap = (24 * 60 + start_j) - prev_end
                     if gap < min_rest_mins:
-                        self.model.Add(self.vars[e][0][j] == 0)
+                        self.model.Add(vj == 0)
 
         # HC4: Weekly hours cap
         for e in range(self.num_employees):
-            # Use integer arithmetic (hours × 10 to avoid float)
-            weekly_hours_x10 = sum(
-                self.vars[e][d][i] * int(self._shift_hours(sc) * 10)
-                for d in range(self.num_days)
-                for i, sc in enumerate(self.shift_codes)
-            )
-            self.model.Add(weekly_hours_x10 <= int(self.max_weekly_hours * 10))
+            terms = [(v, int(self._shift_hours(self.shift_codes[i]) * 10))
+                     for d in range(self.num_days)
+                     for i, v in self.vars[e][d].items()]
+            if terms:
+                weekly_hours_x10 = sum(v * w for v, w in terms)
+                self.model.Add(weekly_hours_x10 <= int(self.max_weekly_hours * 10))
 
-        # HC5: Skill match
-        for e, habit in enumerate(self.habits):
-            for i, sc in enumerate(self.shift_codes):
-                role = shift_code_to_role(sc, self.workstation_roles)
-                if not employee_can_do_shift(habit, sc, role, self.workstation_roles):
-                    for d in range(self.num_days):
-                        self.model.Add(self.vars[e][d][i] == 0)
-
-        # HC6: Designated rest days (never relaxed — labor law)
-        for e, habit in enumerate(self.habits):
-            rest_day_indices = self.rest_days.get(habit.employee_id, set())
-            for d in rest_day_indices:
-                if 0 <= d < self.num_days:
-                    for i in range(self.num_shifts):
-                        self.model.Add(self.vars[e][d][i] == 0)
+        # HC5 + HC6 + HC13 + HC15: handled at build time by _is_valid_assignment()
 
         # HC7: Manager coverage constraints (at least N managers in early/late shifts)
         if self.manager_config and self.manager_config.get("member_ids"):
@@ -619,22 +672,20 @@ class DemandScheduleSolver:
             if mgr_indices:
                 for d in range(self.num_days):
                     if relax_level < 2:
-                        # At least daily_early managers on any early B-code shift
                         if early_shift_indices:
-                            self.model.Add(
-                                sum(self.vars[e][d][i]
-                                    for e in mgr_indices
-                                    for i in early_shift_indices)
-                                >= daily_early
-                            )
-                        # At least daily_late managers on any late B-code shift
+                            early_vars = [self.vars[e][d][i]
+                                          for e in mgr_indices
+                                          for i in early_shift_indices
+                                          if i in self.vars[e][d]]
+                            if early_vars:
+                                self.model.Add(sum(early_vars) >= daily_early)
                         if late_shift_indices:
-                            self.model.Add(
-                                sum(self.vars[e][d][i]
-                                    for e in mgr_indices
-                                    for i in late_shift_indices)
-                                >= daily_late
-                            )
+                            late_vars = [self.vars[e][d][i]
+                                         for e in mgr_indices
+                                         for i in late_shift_indices
+                                         if i in self.vars[e][d]]
+                            if late_vars:
+                                self.model.Add(sum(late_vars) >= daily_late)
 
         # HC9: Forbidden same-day rest pairs
         no_same_rest = self.manager_config.get("no_same_rest", [])
@@ -643,8 +694,8 @@ class DemandScheduleSolver:
             idx_b = next((e for e, h in enumerate(self.habits) if h.employee_id == pair[1]), None)
             if idx_a is not None and idx_b is not None:
                 for d in range(self.num_days):
-                    working_a = sum(self.vars[idx_a][d][i] for i in range(self.num_shifts))
-                    working_b = sum(self.vars[idx_b][d][i] for i in range(self.num_shifts))
+                    working_a = self._working_sum(idx_a, d)
+                    working_b = self._working_sum(idx_b, d)
                     # At least one must work: working_a + working_b >= 1
                     self.model.Add(working_a + working_b >= 1)
 
@@ -655,15 +706,13 @@ class DemandScheduleSolver:
             max_consec = self.tenant_config.constraints.get("max_consecutive_working_days", 4)
         self._has_hard_rhythm = (relax_level < 2 and max_consec > 0)
         if self._has_hard_rhythm:
-            window = max_consec + 1  # e.g. 5-day window to forbid all working
+            window = max_consec + 1
             for e in range(self.num_employees):
                 for start_d in range(self.num_days - window + 1):
-                    self.model.Add(
-                        sum(self.vars[e][d][i]
-                            for d in range(start_d, start_d + window)
-                            for i in range(self.num_shifts))
-                        <= max_consec
-                    )
+                    window_vars = [v for d in range(start_d, start_d + window)
+                                   for v in self.vars[e][d].values()]
+                    if window_vars:
+                        self.model.Add(sum(window_vars) <= max_consec)
 
         # HC12: No isolated rest days (forbid work-rest-work pattern)
         # Relaxed at level >= 2 (falls back to soft penalty in build_objective SC7)
@@ -676,71 +725,30 @@ class DemandScheduleSolver:
                     w_next = self.model.NewBoolVar(f"hc12_wn_{e}_{d}")
                     r_curr = self.model.NewBoolVar(f"hc12_rc_{e}_{d}")
                     self.model.Add(
-                        sum(self.vars[e][d-1][i] for i in range(self.num_shifts)) >= 1
+                        self._working_sum(e, d-1) >= 1
                     ).OnlyEnforceIf(w_prev)
                     self.model.Add(
-                        sum(self.vars[e][d-1][i] for i in range(self.num_shifts)) == 0
+                        self._working_sum(e, d-1) == 0
                     ).OnlyEnforceIf(w_prev.Not())
                     self.model.Add(
-                        sum(self.vars[e][d][i] for i in range(self.num_shifts)) == 0
+                        self._working_sum(e, d) == 0
                     ).OnlyEnforceIf(r_curr)
                     self.model.Add(
-                        sum(self.vars[e][d][i] for i in range(self.num_shifts)) >= 1
+                        self._working_sum(e, d) >= 1
                     ).OnlyEnforceIf(r_curr.Not())
                     self.model.Add(
-                        sum(self.vars[e][d+1][i] for i in range(self.num_shifts)) >= 1
+                        self._working_sum(e, d+1) >= 1
                     ).OnlyEnforceIf(w_next)
                     self.model.Add(
-                        sum(self.vars[e][d+1][i] for i in range(self.num_shifts)) == 0
+                        self._working_sum(e, d+1) == 0
                     ).OnlyEnforceIf(w_next.Not())
                     # Forbid: w_prev AND r_curr AND w_next
                     self.model.AddBoolOr([w_prev.Not(), r_curr.Not(), w_next.Not()])
 
-        # HC13: PT availability time windows
-        # PT employees can only be assigned shifts within their declared available windows.
-        # Days not listed → unavailable (all shifts = 0).
-        # Listed days → only shifts whose time range falls within the window.
-        for e, habit in enumerate(self.habits):
-            if habit.employee_type != "pt":
-                continue
-            avail = self.pt_availability.get(habit.employee_id)
-            if avail is None:
-                continue  # no data → keep existing behavior (SC8 soft constraint)
-            for d in range(self.num_days):
-                if d not in avail:
-                    # Not listed → unavailable entire day
-                    for i in range(self.num_shifts):
-                        self.model.Add(self.vars[e][d][i] == 0)
-                else:
-                    avail_start, avail_end = avail[d]
-                    for i, sc in enumerate(self.shift_codes):
-                        s_start = self._shift_start_minutes(sc)
-                        s_end = self._shift_end_minutes(sc)
-                        if s_start < avail_start or s_end > avail_end:
-                            self.model.Add(self.vars[e][d][i] == 0)
+        # HC5/HC6/HC13/HC15: handled at build time by _is_valid_assignment()
 
         # HC14: Time-point coverage constraints (active_at mode)
         self._add_timepoint_coverage_constraints(relax_level)
-
-        # HC15: FT/PT shift separation when pt_shift_generation is active
-        # FT can only take non-PT shifts (>= ft_min_shift_hours)
-        # PT can only take PT_* auto-generated shifts
-        has_pt_gen = bool(self.tenant_config and self.tenant_config.pt_shift_generation)
-        ft_min = 0
-        if self.tenant_config:
-            ft_min = self.tenant_config.constraints.get("ft_min_shift_hours", 0)
-        if ft_min > 0 or has_pt_gen:
-            for e, habit in enumerate(self.habits):
-                for i, sc in enumerate(self.shift_codes):
-                    is_pt_shift = sc.startswith("PT_")
-                    block = False
-                    if habit.employee_type == "ft" and is_pt_shift:
-                        block = True  # FT cannot take PT shifts
-                    elif habit.employee_type == "pt" and has_pt_gen and not is_pt_shift:
-                        block = True  # PT cannot take FT shifts when auto-gen is active
-                    if block:
-                        for d in range(self.num_days):
-                            self.model.Add(self.vars[e][d][i] == 0)
 
         # HC16: Minimum FT employees per day (skip closure days)
         min_ft = 0
@@ -753,9 +761,7 @@ class DemandScheduleSolver:
                 ft_working = []
                 for e, habit in enumerate(self.habits):
                     if habit.employee_type == "ft":
-                        ft_working.extend(
-                            self.vars[e][d][i] for i in range(self.num_shifts)
-                        )
+                        ft_working.extend(self.vars[e][d].values())
                 if ft_working:
                     self.model.Add(sum(ft_working) >= min_ft)
 
@@ -771,9 +777,9 @@ class DemandScheduleSolver:
                     continue
                 # Sum hours × 10 (integer) for all employees on this day
                 day_hours_x10 = sum(
-                    self.vars[e][d][i] * int(self._shift_hours(sc) * 10)
+                    v * int(self._shift_hours(self.shift_codes[i]) * 10)
                     for e in range(self.num_employees)
-                    for i, sc in enumerate(self.shift_codes)
+                    for i, v in self.vars[e][d].items()
                 )
                 if daily_h_max > 0:
                     if relax_level == 0:
@@ -839,12 +845,14 @@ class DemandScheduleSolver:
 
             for d in range(self.num_days):
                 if d in self.closure_days:
-                    continue  # skip closure days
-                total = sum(
-                    self.vars[e][d][i]
-                    for e in range(self.num_employees)
-                    for i in active_indices
-                )
+                    continue
+                total_vars = [self.vars[e][d][i]
+                              for e in range(self.num_employees)
+                              for i in active_indices
+                              if i in self.vars[e][d]]
+                if not total_vars:
+                    continue  # no vars can cover this time point
+                total = sum(total_vars)
                 if relax_level == 0:
                     self.model.Add(total >= min_staff)
                 else:
@@ -886,6 +894,7 @@ class DemandScheduleSolver:
                     self.vars[e][d][i]
                     for e in range(self.num_employees)
                     for i in role_shift_indices
+                    if i in self.vars[e][d]
                 )
                 if relax_level == 0:
                     self.model.Add(role_staff >= min_count)
@@ -944,9 +953,8 @@ class DemandScheduleSolver:
                 continue
 
             total_staff = sum(
-                self.vars[e][d][i]
-                for e in countable_employees
-                for i in range(self.num_shifts)
+                v for e in countable_employees
+                for v in self.vars[e][d].values()
             )
 
             if relax_level == 0 and not self._has_hard_rhythm:
@@ -982,7 +990,9 @@ class DemandScheduleSolver:
                 if sc not in self.sc_idx:
                     continue
                 i = self.sc_idx[sc]
-                staff_sum = sum(self.vars[e][d][i] for e in range(self.num_employees))
+                staff_sum = self._shift_sum(d, i)
+                if staff_sum is None:
+                    continue  # no employee can take this shift
                 min_required = 1 if relax else required
                 self.model.Add(staff_sum >= min_required)
 
@@ -1009,15 +1019,16 @@ class DemandScheduleSolver:
                 if sc not in self.sc_idx:
                     continue
                 if required <= 0:
-                    continue  # demand=0 handled below with zero-demand shifts
+                    continue
                 i = self.sc_idx[sc]
                 target = max(1, required) if relax_level >= 2 else required
-                staff_sum = sum(self.vars[e][d][i] for e in range(self.num_employees))
+                staff_sum = self._shift_sum(d, i)
+                if staff_sum is None:
+                    continue
                 shortage = self.model.NewIntVar(0, self.num_employees,
                                                f"shortage_{sc}_d{d}")
                 self.model.Add(shortage >= target - staff_sum)
                 penalties.append((shortage, W_VAC))
-                # Penalize overstaffing (less weight than shortage)
                 surplus = self.model.NewIntVar(0, self.num_employees,
                                               f"surplus_{sc}_d{d}")
                 self.model.Add(surplus >= staff_sum - target)
@@ -1029,7 +1040,9 @@ class DemandScheduleSolver:
             for i, sc in enumerate(self.shift_codes):
                 if sc not in codes_with_demand and not sc.startswith("PT_"):
                     for e in range(self.num_employees):
-                        penalties.append((self.vars[e][d][i], W_VAC))
+                        v = self.vars[e][d].get(i)
+                        if v is not None:
+                            penalties.append((v, W_VAC))
 
         # ── SC2: Shift preference (fixed: supports shift codes & time labels) ──
         if relax_level < 1 and self.enforce_preferences:
@@ -1055,8 +1068,9 @@ class DemandScheduleSolver:
 
                     if pref_rank > 0:
                         for d in range(self.num_days):
-                            penalties.append((self.vars[e][d][i],
-                                              pref_rank * W_PREF))
+                            v = self.vars[e][d].get(i)
+                            if v is not None:
+                                penalties.append((v, pref_rank * W_PREF))
 
         # ── SC3: Fairness — personalised target from avg_shifts_per_week ──
         max_wd = self.tenant_config.constraints.get("max_working_days", 5) if self.tenant_config else 5
@@ -1070,9 +1084,8 @@ class DemandScheduleSolver:
                 target_days = max_wd  # default for employees with no data
 
             total = sum(
-                self.vars[e][d][i]
-                for d in range(self.num_days)
-                for i in range(self.num_shifts)
+                v for d in range(self.num_days)
+                for v in self.vars[e][d].values()
             )
             # Penalise both over-scheduling and under-scheduling
             overwork = self.model.NewIntVar(0, self.num_days, f"overwork_{e}")
@@ -1091,8 +1104,9 @@ class DemandScheduleSolver:
                 if habit.overtime_willingness == "no_overtime":
                     for d in range(self.num_days):
                         for i in late_indices:
-                            penalties.append((self.vars[e][d][i],
-                                              W_EMPLOYEE_SOFT))
+                            v = self.vars[e][d].get(i)
+                            if v is not None:
+                                penalties.append((v, W_EMPLOYEE_SOFT))
 
         # ── SC5: Shift frequency preference (new) ──
         if relax_level < 1 and self.enforce_preferences:
@@ -1118,7 +1132,9 @@ class DemandScheduleSolver:
                     penalty = int(W_SHIFT * 10 * (max_freq - f_val) / max_freq)
                     if penalty > 0:
                         for d in range(self.num_days):
-                            penalties.append((self.vars[e][d][i], penalty))
+                            v = self.vars[e][d].get(i)
+                            if v is not None:
+                                penalties.append((v, penalty))
 
         # ── SC6: 避免連上五天 (penalize 5 consecutive working days) ──
         W_CONSEC5 = self.weights["W_CONSEC5"]
@@ -1127,8 +1143,8 @@ class DemandScheduleSolver:
                 window_working = []
                 for d in range(start_d, start_d + 5):
                     w = self.model.NewBoolVar(f"working_{e}_{d}_sc6_{start_d}")
-                    self.model.Add(sum(self.vars[e][d][i] for i in range(self.num_shifts)) >= 1).OnlyEnforceIf(w)
-                    self.model.Add(sum(self.vars[e][d][i] for i in range(self.num_shifts)) == 0).OnlyEnforceIf(w.Not())
+                    self.model.Add(self._working_sum(e, d) >= 1).OnlyEnforceIf(w)
+                    self.model.Add(self._working_sum(e, d) == 0).OnlyEnforceIf(w.Not())
                     window_working.append(w)
                 # all_five = 1 only when all 5 days are working
                 all_five = self.model.NewBoolVar(f"consec5_{e}_{start_d}")
@@ -1167,10 +1183,10 @@ class DemandScheduleSolver:
                     for cd in range(curr_days_needed):
                         w = self.model.NewBoolVar(f"working_cross_{e}_{offset}_{cd}")
                         self.model.Add(
-                            sum(self.vars[e][cd][i] for i in range(self.num_shifts)) >= 1
+                            self._working_sum(e, cd) >= 1
                         ).OnlyEnforceIf(w)
                         self.model.Add(
-                            sum(self.vars[e][cd][i] for i in range(self.num_shifts)) == 0
+                            self._working_sum(e, cd) == 0
                         ).OnlyEnforceIf(w.Not())
                         curr_working_vars.append(w)
 
@@ -1190,12 +1206,12 @@ class DemandScheduleSolver:
                 r_curr = self.model.NewBoolVar(f"rc_{e}_{d}")
                 w_next = self.model.NewBoolVar(f"wn_{e}_{d}")
 
-                self.model.Add(sum(self.vars[e][d-1][i] for i in range(self.num_shifts)) >= 1).OnlyEnforceIf(w_prev)
-                self.model.Add(sum(self.vars[e][d-1][i] for i in range(self.num_shifts)) == 0).OnlyEnforceIf(w_prev.Not())
-                self.model.Add(sum(self.vars[e][d][i] for i in range(self.num_shifts)) == 0).OnlyEnforceIf(r_curr)
-                self.model.Add(sum(self.vars[e][d][i] for i in range(self.num_shifts)) >= 1).OnlyEnforceIf(r_curr.Not())
-                self.model.Add(sum(self.vars[e][d+1][i] for i in range(self.num_shifts)) >= 1).OnlyEnforceIf(w_next)
-                self.model.Add(sum(self.vars[e][d+1][i] for i in range(self.num_shifts)) == 0).OnlyEnforceIf(w_next.Not())
+                self.model.Add(self._working_sum(e, d-1) >= 1).OnlyEnforceIf(w_prev)
+                self.model.Add(self._working_sum(e, d-1) == 0).OnlyEnforceIf(w_prev.Not())
+                self.model.Add(self._working_sum(e, d) == 0).OnlyEnforceIf(r_curr)
+                self.model.Add(self._working_sum(e, d) >= 1).OnlyEnforceIf(r_curr.Not())
+                self.model.Add(self._working_sum(e, d+1) >= 1).OnlyEnforceIf(w_next)
+                self.model.Add(self._working_sum(e, d+1) == 0).OnlyEnforceIf(w_next.Not())
 
                 alt_pattern = self.model.NewBoolVar(f"alt_{e}_{d}")
                 self.model.AddBoolAnd([w_prev, r_curr, w_next]).OnlyEnforceIf(alt_pattern)
@@ -1218,10 +1234,10 @@ class DemandScheduleSolver:
                     # day0 working is the only variable
                     w_day0 = self.model.NewBoolVar(f"sc7_cross1_w0_{e}")
                     self.model.Add(
-                        sum(self.vars[e][0][i] for i in range(self.num_shifts)) >= 1
+                        self._working_sum(e, 0) >= 1
                     ).OnlyEnforceIf(w_day0)
                     self.model.Add(
-                        sum(self.vars[e][0][i] for i in range(self.num_shifts)) == 0
+                        self._working_sum(e, 0) == 0
                     ).OnlyEnforceIf(w_day0.Not())
                     penalties.append((w_day0, W_ALT_CROSS))
 
@@ -1231,17 +1247,17 @@ class DemandScheduleSolver:
                     w_day1 = self.model.NewBoolVar(f"sc7_cross2_w1_{e}")
 
                     self.model.Add(
-                        sum(self.vars[e][0][i] for i in range(self.num_shifts)) == 0
+                        self._working_sum(e, 0) == 0
                     ).OnlyEnforceIf(r_day0)
                     self.model.Add(
-                        sum(self.vars[e][0][i] for i in range(self.num_shifts)) >= 1
+                        self._working_sum(e, 0) >= 1
                     ).OnlyEnforceIf(r_day0.Not())
 
                     self.model.Add(
-                        sum(self.vars[e][1][i] for i in range(self.num_shifts)) >= 1
+                        self._working_sum(e, 1) >= 1
                     ).OnlyEnforceIf(w_day1)
                     self.model.Add(
-                        sum(self.vars[e][1][i] for i in range(self.num_shifts)) == 0
+                        self._working_sum(e, 1) == 0
                     ).OnlyEnforceIf(w_day1.Not())
 
                     alt_cross = self.model.NewBoolVar(f"alt_cross2_{e}")
@@ -1260,11 +1276,11 @@ class DemandScheduleSolver:
                 if habit.employee_type == "pt":
                     for d in range(self.num_days):
                         for i in non_evening_indices:
-                            penalties.append((self.vars[e][d][i], W_PT_EVENING))
+                            v = self.vars[e][d].get(i)
+                            if v is not None:
+                                penalties.append((v, W_PT_EVENING))
 
         # ── SC9: PT hours incentive — prefer longer PT shifts ──
-        # Reward (negative penalty) proportional to shift hours, so solver fills
-        # the availability window instead of picking minimum-length 3h blocks.
         W_PT_HOURS = self.weights.get("W_PT_HOURS", 3)
         if W_PT_HOURS > 0 and any(sc.startswith("PT_") for sc in self.shift_codes):
             for e, habit in enumerate(self.habits):
@@ -1273,12 +1289,11 @@ class DemandScheduleSolver:
                 for d in range(self.num_days):
                     if d in self.closure_days:
                         continue
-                    for i, sc in enumerate(self.shift_codes):
+                    for i, v in self.vars[e][d].items():
+                        sc = self.shift_codes[i]
                         if sc.startswith("PT_"):
                             hours_x10 = int(self._shift_hours(sc) * 10)
-                            # Negative weight = reward for longer shifts
-                            penalties.append((self.vars[e][d][i],
-                                              -W_PT_HOURS * hours_x10))
+                            penalties.append((v, -W_PT_HOURS * hours_x10))
 
         return penalties
 
@@ -1333,8 +1348,9 @@ class DemandScheduleSolver:
         entries = []
         for e, habit in enumerate(self.habits):
             for d in range(self.num_days):
-                for i, sc in enumerate(self.shift_codes):
-                    if solver.Value(self.vars[e][d][i]) == 1:
+                for i, v in self.vars[e][d].items():
+                    if solver.Value(v) == 1:
+                        sc = self.shift_codes[i]
                         defn = self.shift_defs.get(sc, {})
                         role = shift_code_to_role(sc, self.workstation_roles)
                         entry = ScheduleEntry(
@@ -1357,8 +1373,9 @@ class DemandScheduleSolver:
         for e, habit in enumerate(self.habits):
             total_hours = 0.0
             for d in range(self.num_days):
-                for i, sc in enumerate(self.shift_codes):
-                    if solver.Value(self.vars[e][d][i]) == 1:
+                for i, v in self.vars[e][d].items():
+                    if solver.Value(v) == 1:
+                        sc = self.shift_codes[i]
                         total_hours += self._shift_hours(sc)
                         shift_code_daily[sc][d] += 1
             emp_hours[habit.employee_id] = total_hours

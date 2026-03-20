@@ -727,7 +727,9 @@ def load_habits_json(input_path: str) -> list:
 
 def load_availability(tenant_dir: str, week_start: str, num_days: int = 7) -> tuple:
     """
-    Load availability.json (preferred) or fallback to rest_days.json.
+    Load availability.json + rest_days.json (merged, not either-or).
+    - availability.json: designated_rest + pt_availability
+    - rest_days.json: additional designated_rest (merged)
     Returns:
         ft_rest_days: {employee_id: set of day_indices (0-6)}
         pt_availability: {employee_id: {day_index: (start_minutes, end_minutes)}}
@@ -737,24 +739,53 @@ def load_availability(tenant_dir: str, week_start: str, num_days: int = 7) -> tu
     ft_rest_days = {}
     pt_availability = {}
     ws = datetime.strptime(week_start, "%Y-%m-%d")
+    sources = []
 
     avail_path = os.path.join(tenant_dir, "availability.json")
     rest_path = os.path.join(tenant_dir, "rest_days.json")
 
+    # Collect designated_rest from both files (merge)
+    all_designated = {}  # {emp_id: set of date_str}
+
     if os.path.exists(avail_path):
         with open(avail_path, encoding="utf-8") as f:
-            data = json.load(f)
-        source = "availability.json"
-    elif os.path.exists(rest_path):
+            avail_data = json.load(f)
+        sources.append("availability.json")
+        for emp_id, dates in avail_data.get("designated_rest", {}).items():
+            all_designated.setdefault(emp_id, set()).update(dates)
+        # Parse pt_availability
+        raw_pt = avail_data.get("pt_availability", {})
+        for emp_id, date_windows in raw_pt.items():
+            windows = {}
+            for date_str, time_range in date_windows.items():
+                try:
+                    d = datetime.strptime(date_str, "%Y-%m-%d")
+                    diff = (d - ws).days
+                    if 0 <= diff < num_days:
+                        start_parts = time_range["start"].split(":")
+                        end_parts = time_range["end"].split(":")
+                        start_m = int(start_parts[0]) * 60 + int(start_parts[1])
+                        end_m = int(end_parts[0]) * 60 + int(end_parts[1])
+                        if end_m <= start_m:
+                            end_m += 24 * 60  # overnight
+                        windows[diff] = (start_m, end_m)
+                except (ValueError, KeyError):
+                    pass
+            if windows:
+                pt_availability[emp_id] = windows
+
+    if os.path.exists(rest_path):
         with open(rest_path, encoding="utf-8") as f:
-            data = json.load(f)
-        source = "rest_days.json"
-    else:
+            rest_data = json.load(f)
+        sources.append("rest_days.json")
+        for emp_id, dates in rest_data.get("designated_rest", {}).items():
+            all_designated.setdefault(emp_id, set()).update(dates)
+
+    if not sources:
         return ft_rest_days, pt_availability
 
-    # Parse designated_rest → ft_rest_days
-    designated = data.get("designated_rest", {})
-    for emp_id, dates in designated.items():
+    # Convert designated_rest dates → day indices for this week
+    for emp_id, dates in all_designated.items():
         day_indices = set()
         for date_str in dates:
             try:
@@ -767,30 +798,9 @@ def load_availability(tenant_dir: str, week_start: str, num_days: int = 7) -> tu
         if day_indices:
             ft_rest_days[emp_id] = day_indices
 
-    # Parse pt_availability (only in availability.json)
-    raw_pt = data.get("pt_availability", {})
-    for emp_id, date_windows in raw_pt.items():
-        windows = {}
-        for date_str, time_range in date_windows.items():
-            try:
-                d = datetime.strptime(date_str, "%Y-%m-%d")
-                diff = (d - ws).days
-                if 0 <= diff < num_days:
-                    start_parts = time_range["start"].split(":")
-                    end_parts = time_range["end"].split(":")
-                    start_m = int(start_parts[0]) * 60 + int(start_parts[1])
-                    end_m = int(end_parts[0]) * 60 + int(end_parts[1])
-                    if end_m <= start_m:
-                        end_m += 24 * 60  # overnight
-                    windows[diff] = (start_m, end_m)
-            except (ValueError, KeyError):
-                pass
-        if windows:
-            pt_availability[emp_id] = windows
-
     rest_count = sum(len(v) for v in ft_rest_days.values())
     pt_count = len(pt_availability)
-    print(f"📋 可用性載入 ({source}): {rest_count} 筆指定休假, {pt_count} 位 PT 時段")
+    print(f"📋 可用性載入 ({'+'.join(sources)}): {rest_count} 筆指定休假, {pt_count} 位 PT 時段")
 
     return ft_rest_days, pt_availability
 
