@@ -46,7 +46,7 @@ The Auditor validates a schedule against four priority layers:
 | `manager_constraints` | `tenant_config.json` | P1: manager early/late coverage |
 | `no_same_rest` | `tenant_config.json` | P1: forbidden same-day rest pairs |
 | `is_manager` | `habits.json` (per employee) | Identifies managers for coverage checks |
-| `designated_rest` | `availability.json`（fallback: `rest_days.json`） | P0: must not schedule on rest days |
+| `designated_rest` | `availability.json` + `rest_days.json`（合併載入） | P0: must not schedule on rest days |
 | `pt_availability` | `availability.json` | P0: PT must not exceed declared windows |
 
 ---
@@ -162,7 +162,7 @@ python scripts/auditor_tools.py schedule.csv habits.json audit_report.json tenan
 ### P1 — Tenant Rules
 | Rule ID | Description | Config Source |
 |---------|-------------|---------------|
-| P1-001 | Shift-level staffing minimum | Coverage targets |
+| P1-001 | Shift-level staffing minimum | Coverage targets（支援 `active_at` 模式：計算 start ≤ T < end 的在班人數） |
 | P1-002 | Daily total headcount minimum | `tenant_config.json → min_daily_headcount` |
 | P1-003 | Manager early/late coverage | `tenant_config.json → manager_constraints` + `habits.json → is_manager` |
 | P1-004 | No-same-rest pair violation | `tenant_config.json → no_same_rest` |

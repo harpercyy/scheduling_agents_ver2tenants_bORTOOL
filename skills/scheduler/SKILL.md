@@ -45,8 +45,9 @@ The Scheduler uses Google OR-Tools **CP-SAT** to generate a weekly roster that:
 | `no_same_rest` | `tenant_config.json` | Pairs that cannot rest on same day |
 | `is_manager` | `habits.json` (per employee) | Identifies which employees are managers |
 | `package_dates` | `events.json` | Private event dates (affects scenario detection) |
-| `designated_rest` | `availability.json`（fallback: `rest_days.json`） | FT employee-designated rest days |
+| `designated_rest` | `availability.json` + `rest_days.json`（合併載入） | FT employee-designated rest days |
 | `pt_availability` | `availability.json` | PT employee available time windows |
+| `pt_shift_generation` | `tenant_config.json` | Auto-generate PT flexible shifts (granularity, min/max hours) |
 
 ### Demand Profile Format (`habits_demand_shift.json`)
 
@@ -174,6 +175,7 @@ python scripts/auditor_tools.py schedule_0302.csv habits.json audit_0302.json te
 | SC5 | Shift Frequency | W_SHIFT=5 | Uses `shift_frequency` history |
 | SC6 | No 5-day streak | W_CONSEC5=30 | Penalizes 5+ consecutive working days (including cross-week) |
 | SC7 | No work-rest-work | W_ALTERNATE=15 | Penalizes isolated rest days (including cross-week) |
+| SC9 | PT hours incentive | W_PT_HOURS=-1 | Negative penalty to incentivize longer PT shifts (avoids min 3h) |
 
 ## Hard Constraint Reference
 
@@ -186,6 +188,23 @@ python scripts/auditor_tools.py schedule_0302.csv habits.json audit_0302.json te
 | Skill match (workstation_skills) | Always enforced |
 | Designated rest days (HC6) | Always enforced (labor law) |
 | PT availability windows (HC13) | Always enforced — PT only scheduled within declared time windows |
+| Time-point coverage (HC14) | `coverage_targets` with `match: "active_at"` — min people active at specific times |
+| FT/PT shift separation (HC15) | FT can only take F-codes; PT can only take PT_* codes (when `pt_shift_generation` active) |
+| Min FT per day (HC16) | From `constraints.min_ft_per_day` — skipped on closure days |
+| Daily total hours band (HC17) | From `constraints.daily_total_hours_min/max` — hard at level 0, soft at level 1+ |
 | Manager coverage | From `tenant_config.json → manager_constraints` + `habits.json → is_manager` |
 | No-same-rest pairs | From `tenant_config.json → no_same_rest` |
 | Demand minimum per shift code | Always enforced (relaxed to 1 at Level 2) |
+
+### Build-time Variable Filtering
+
+When `pt_shift_generation` is active, the solver uses `_is_valid_assignment()` to pre-filter invalid (employee, day, shift) combinations at build time. This typically reduces variables by **80–98%** (e.g. from ~11,800 to ~300). Invalid assignments include:
+- FT assigned to PT_* shifts (or vice versa)
+- PT on undeclared availability dates (strict mode)
+- PT shifts outside declared time windows
+- Skill mismatches
+- Designated rest days
+
+### Closure Day Detection
+
+Days where **all employees** have designated rest are detected as closure days. HC14, HC16, HC17, and headcount constraints are automatically skipped for these days.

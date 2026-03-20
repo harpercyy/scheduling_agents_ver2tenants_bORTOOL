@@ -35,13 +35,14 @@ schedule-agents/
     │   ├── tenant_config.json         ← 店面設定 schema（班次、角色、人力需求、主管約束、禁同休）
     │   ├── availability.json          ← 員工可用性（FT 指定休假 + PT 時段）
     │   ├── events.json                ← 包場 / 特殊事件日期
-    │   ├── rest_days.json             ← 指定劃休（availability.json 的 fallback）
+    │   ├── rest_days.json             ← FT 指定劃休（與 availability.json 合併載入）
     │   ├── line_name_map.json         ← LINE 顯示名稱 → employee_id（Phase 2 用）
     │   ├── RULES.md                   ← 店面商業規則（Analyzer 解析幹部/領檯 + Claude 決策參考）
     │   ├── weight_sweep.json          ← 權重掃描設定（weight-tuner 用）
     │   └── output/                    ← 所有產出檔（自動建立）
-    ├── glod-pig/                      ← 金豬食堂（現有租戶）
-    └── john-tea-company/              ← 約翰紅茶示範門市（現有租戶）
+    ├── glod-pig/                      ← 金豬食堂（現有租戶，純 FT）
+    ├── john-tea-company/              ← 約翰紅茶示範門市（現有租戶）
+    └── john-tea-company-pt/           ← 約翰紅茶南港門市（FT + PT 彈性排班）
 ```
 
 ---
@@ -66,7 +67,7 @@ schedule-agents/
 | 禁同休配對 | `tenant_config.json → no_same_rest` | 不可同日休假的員工配對 |
 | 幹部/領檯指派 | `RULES.md`（Analyzer 自動解析） | 幹部名單 → `habits.json` 的 `is_manager`；領檯指派 → `workstation_skills` 覆蓋 |
 | 包場日期 | `events.json → package_dates` | 手動補充或從 CSV 營運備註自動偵測 |
-| 員工可用性 | `availability.json`（fallback: `rest_days.json`） | FT 指定休假 + PT 可上班時段 |
+| 員工可用性 | `availability.json` + `rest_days.json`（合併載入） | FT 指定休假 + PT 可上班時段 |
 | 商業規則 | `RULES.md` | 人類可讀的排班規範（供 Claude 參考決策 + Analyzer 解析角色） |
 
 ### 2.2 tenant_config.json Schema
@@ -144,7 +145,7 @@ schedule-agents/
 | `scenarios` | ⬚ | 情境名稱列表，**順序固定**：`[weekday, weekday+package, weekend, weekend+package]`，預設 `["平日", "平日包場", "週末", "週末包場"]` |
 | `min_daily_headcount` | ⬚ | 各情境最低人力，預設全 0（不強制） |
 | `coverage_targets` | ⬚ | 時段最低人力需求。支援兩種模式：(1) 前綴比對（預設）`{ "HH:MM": { min, label } }`；(2) 時間點覆蓋 `{ "HH:MM": { min, label, match: "active_at" } }` — 計算在該時間點 active 的所有班次（`start ≤ T < end`） |
-| `constraints` | ⬚ | 勞動約束覆寫，含 `ft_min_shift_hours`（FT 最低班次時數）、`min_ft_per_day`（每日最低正職人數），未設定則用預設值 |
+| `constraints` | ⬚ | 勞動約束覆寫，含 `ft_min_shift_hours`（FT 最低班次時數）、`min_ft_per_day`（每日最低正職人數）、`daily_total_hours_min/max`（每日總工時上下限），未設定則用預設值 |
 | `pt_shift_generation` | ⬚ | PT 班次自動產生設定 `{ earliest_start, latest_end, granularity_minutes, min_hours, max_hours, role }`，Solver 啟動時自動產生所有合法 PT 班次，無則省略 |
 | `manager_constraints` | ⬚ | 主管排班約束（含 `early_hour_threshold`、`late_hour_threshold` 回退判斷），無主管制度可省略 |
 | `no_same_rest` | ⬚ | 禁同休配對 `{ pairs: [[id_a, id_b], ...] }`，無則省略 |
@@ -300,4 +301,4 @@ data_loader.py ← 被所有腳本 import
 | 調優排班權重 | `skills/weight-tuner/SKILL.md` | `run.py --sweep` |
 | 調整排班規則 | `tenants/<t>/RULES.md` + `tenant_config.json` | 重跑 Scheduler |
 | 搜集員工可用性 | `skills/availability/SKILL.md` | 編輯 `availability.json` → 重跑 Scheduler |
-| 員工指定休假 | `tenants/<t>/availability.json`（或 `rest_days.json`） | 重跑 Scheduler |
+| 員工指定休假 | `tenants/<t>/availability.json` + `rest_days.json`（合併載入） | 重跑 Scheduler |
